@@ -43,10 +43,10 @@ class Neuron:
 
     # Производная функции ошибки
     # -2b(t-x)e^(-b(t-x)^2)
-    # def dererrfunc(self, t, x):
-    #     return -2 * self.expscale\
-    #             * (t - x)\
-    #             * np.exp(-self.expscale * np.power(t - x, 2))
+    def dererrfunc(self, t, x):
+        return -2 * self.expscale\
+                * (t - x)\
+                * np.exp(-self.expscale * np.power(t - x, 2))
 
     # Присваивание градиента
     def getgrad(self, tt=float, appr='direct'):
@@ -70,14 +70,15 @@ class Neuron:
 
     def backward(self):  # Обратный прогон
         # Получение градиента iws
-        self.Viws.g = deractfunc(self.Viws.v)\
-                      * self.Voo.g.sum()\
-                      * self.deltaT\
+        self.Viws.g = self.Voo.g.sum()\
+                      # * self.deltaT\
+                      # * deractfunc([self.Viws.v])[0]\
                       # * self.dererrfunc(self.Vt, self.Viws.v)
         # Получение градиента весов
         self.Vw.g = deractfunc(self.Vii.v)\
             * self.Vii.v\
             * self.Viws.g\
+            * self.dererrfunc(self.Vt, self.Vii.v)
             # * self.dererrfunc(self.Vt, self.Vii.v)
         # Получение градиента входов
         self.Vii.g = self.Vw.v * self.Viws.g
