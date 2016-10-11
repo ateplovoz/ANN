@@ -10,15 +10,12 @@ def actfunc(val):
     if val > 0:
         return val
     else:
-        return 0
+        return 0.01 * val
 
 
 # Производная функции активации
 def deractfunc(val):
-    if val > 0:
-        return 1
-    else:
-        return 0
+    return [(0.01, 1)[v > 0] for v in val]
 
 
 class NSignal:
@@ -29,7 +26,7 @@ class NSignal:
 
 class Neuron:
     def __init__(self, cii):
-        self.shake = 0.001  # Величина встряхивания весов
+        self.shake = 0.1  # Величина встряхивания весов
         self.pullback = 0.01  # Величина упругого возвращения весов
         self.deltaT = 0.001  # Скорость обучения
         self.expscale = 1  # Крутизна экспоненты
@@ -39,12 +36,25 @@ class Neuron:
         self.Voo = NSignal(1)  # Массив выходных сигналов
         self.Vt = np.array([0])  # Массив целевых значений
 
-    def getgrad(self, tt=float, appr='direct'):  # Присваивание градиента
+    # Функция ошибки
+    # 1-e^(-b(t-x)^2)
+    def errfunc(self, t, x):
+        return 1 - np.exp(-self.expscale * np.power(t - x, 2))
+
+    # Производная функции ошибки
+    # -2b(t-x)e^(-b(t-x)^2)
+    # def dererrfunc(self, t, x):
+    #     return -2 * self.expscale\
+    #             * (t - x)\
+    #             * np.exp(-self.expscale * np.power(t - x, 2))
+
+    # Присваивание градиента
+    def getgrad(self, tt=float, appr='direct'):
         self.Vt = tt
         if appr == 'direct':  # Прямой перенос по связям
             self.Voo.g = 1 * self.Vt
         if appr == 'target':  # Вычисление расстояния до цели
-            gr = 1 - np.exp(-self.expscale * np.power(self.Vt - self.Voo.v, 2))
+            gr = 1 - np.exp(-self.expscale * np.power(self.Voo.v - self.Vt, 2))
             if self.Vt - self.Voo.v > 0:
                 self.Voo.g = gr
             else:
@@ -62,9 +72,13 @@ class Neuron:
         # Получение градиента iws
         self.Viws.g = deractfunc(self.Viws.v)\
                       * self.Voo.g.sum()\
-                      * self.deltaT
+                      * self.deltaT\
+                      # * self.dererrfunc(self.Vt, self.Viws.v)
         # Получение градиента весов
-        self.Vw.g = self.Vii.v * self.Viws.g
+        self.Vw.g = deractfunc(self.Vii.v)\
+            * self.Vii.v\
+            * self.Viws.g\
+            # * self.dererrfunc(self.Vt, self.Vii.v)
         # Получение градиента входов
         self.Vii.g = self.Vw.v * self.Viws.g
         # Корректировка весов
@@ -77,8 +91,10 @@ class Neuron:
             * (np.random.random(len(self.Vw.g)) * 2 - 1)
         return self.Vii.g
 
-    def wgh_reset(self, val):
-        self.Vw.v = np.array([val for _ in self.Vw.v])
+    def wgh_tune(self, val, randval):
+        self.Vw.v = np.array([val
+                              + (np.random.rand() * 2 - 1)
+                              * randval for _ in self.Vw.v])
 
 
 # Получение листа градиентов как их воспринимает нейрон
@@ -144,4 +160,12 @@ class NNetwork:
 
     def nwgh_reset(self, val):
         for neurii, neurl1, neuroo in zip(self.Lii, self.L1, self.Loo):
-            neurii.wgh_reset(val)
+            neurii.wgh_tune(val, 0)
+            neurl1.wgh_tune(val, 0)
+            neuroo.wgh_tune(val, 0)
+
+    def nwgh_randomize(self, scale):
+        for neurii, neurl1, neuroo in zip(self.Lii, self.L1, self.Loo):
+            neurii.wgh_tune(0, scale)
+            neurl1.wgh_tune(0, scale)
+            neuroo.wgh_tune(0, scale)
