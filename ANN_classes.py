@@ -160,12 +160,12 @@ class NNetwork:
     def backward(self):  # Обратный прогон
         for VL1, neur in zip(self.VL1, self.Loo):
             VL1.g = neur.backward()
-        for neur in self.L1:
-            [neur.getgrad(sum(g)) for g in unpackgrad(self.VL1).T]
+        for neur, g in zip(self.L1, unpackgrad(self.VL1).T):
+            neur.getgrad(sum(g))
         for VLii, neur in zip(self.VLii, self.L1):
             VLii.g = neur.backward()
-        for neur in self.Lii:
-            [neur.getgrad(sum(g)) for g in unpackgrad(self.VLii).T]
+        for neur, g in zip(self.Lii, unpackgrad(self.VLii).T):
+            neur.getgrad(sum(g))
         for _, neur in zip(self.Vii, self.Lii):
             neur.backward()
 
