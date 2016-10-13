@@ -5,20 +5,21 @@
 import numpy as np
 
 
-# Функция активации
 def actfunc(val):
+    u""""Функция активации"""
     if val > 0:
         return val
     else:
         return 0.01 * val
 
 
-# Производная функции активации
 def deractfunc(val):
+    u""""Производная функции активации"""
     return (0.01, 1)[val > 0]
 
 
 class NSignal:
+    u"""Нейросигнал, содержит в себе значение, градиент и инерцию"""
     def __init__(self, inputs):
         self.v = np.ones([inputs])  # Значение
         self.g = np.ones([inputs])  # Градиент
@@ -26,6 +27,10 @@ class NSignal:
 
 
 class Neuron:
+    u"""
+    Нейрон, имеет cii входов и один выход
+    Внутри себя связан нейросигналами (NSignal)
+    """
     def __init__(self, cii):
         self.shake = 0.1  # Величина встряхивания весов
         self.pullback = 0  # Величина упругого возвращения весов
@@ -37,21 +42,19 @@ class Neuron:
         self.Voo = NSignal(1)  # Массив выходных сигналов
         self.Vt = np.array([0])  # Массив целевых значений
 
-    # Функция ошибки
-    # 1-e^(-b(x-t)^2)
     def errfunc(self, t, x):
+        u"""Функция ошибки, возвращает 1-e^(-b(x-t)^2)"""
         return 1 - np.exp(-self.expscale * np.power(x - t, 2))
 
-    # Производная функции ошибки
-    # -2b(x-t)e^(-b(x-t)^2)
     def dererrfunc(self, t, x):
+        u"""Производная функции ошибки, возвращает -2b(x-t)e^(-b(x-t)^2)"""
         # return -2 * self.expscale\
         #         * (x - t)\
         #         * self.errfunc(t, x)
         return self.errfunc(t, x)
 
-    # Присваивание градиента
     def getgrad(self, tt=float, appr='direct'):
+        u"""Присваивает внешние градиенты выходным сигналам"""
         self.Vt = tt
         if appr == 'direct':  # Прямой перенос по связям
             self.Voo.g = 1 * self.Vt
@@ -62,7 +65,8 @@ class Neuron:
             else:
                 self.Voo.g = -1 * self.dererrfunc(self.Vt, self.Voo.v)
 
-    def forward(self, ii):  # Прямой прогон
+    def forward(self, ii):
+        u"""Рассчитывает и возвращает выход нейрона"""
         if len(ii) != self.Vii.v.size:
             raise RuntimeError('V-input size mismatch!')
         self.Vii.v = np.array(ii)
@@ -70,68 +74,84 @@ class Neuron:
         self.Voo.v = actfunc(self.Viws.v)
         return self.Voo.v
 
-    def backward(self):  # Обратный прогон
+    def backward(self):
+        u"""рассчитывает градиенты на всех сигналах"""
         # Получение градиента iws
         self.Viws.g = self.Voo.g.sum() * deractfunc(self.Viws.v)
         # Получение градиента весов
-        self.Vw.g = self.Vii.v\
-            * self.Viws.g
+        self.Vw.g = self.Vii.v * self.Viws.g
         # Получение градиента входов
-        self.Vii.g = self.Vw.v\
-            * self.Viws.g
-        # self.commit()
+        self.Vii.g = self.Vw.v * self.Viws.g
         return self.Vii.g
 
     def commit(self):
+        u"""Корректирует значения весов"""
         # Упругое возвращение весов к нулю (с учётом инерции)
         self.Vw.g += -self.Vw.v * self.Vw.m * self.pullback
         # Корректировка весов
         self.Vw.v += self.Vw.g * self.deltaT
-        # Встряхивание весов
+        # Встряхивание весов (эл-ты с нулевой инерцией невосприимчивы"
         # self.Vw.v += self.Vw.g \
         #     * self.shake \
         #     * (np.random.random(len(self.Vw.g)) * 2 - 1)
 
     def wgh_tune(self, val, randval):
-        self.Vw.v = np.array([val
-                              + (np.random.rand() * 2 - 1)
-                              * randval for _ in self.Vw.v])
+        u"""
+        Задаёт весам определённое значение
+        val - постоянный уровень
+        randval - диаметр случайного значения
+        """
+        self.Vw.v = np.array([val + (np.random.rand() * 2 - 1) * randval for _ in self.Vw.v])
 
 
-# Получение листа градиентов как их воспринимает нейрон
 def unpackgrad(pack):
+    u"""
+    Вытаскивает градиенты из слоя сигналов
+    Применяется в основном к промежуточным слоям сигналов
+    """
     unpacked = np.array([sig.g for sig in pack])
     return unpacked
 
 
-# Получение листа значений как их воспринимает нейрон
 def unpackval(pack):
+    u"""
+    Вытаскивает значения из слоя сигналов
+    Применяется в основном к промежуточным слоям сигналов
+    """
     unpacked = np.array([np.concatenate((sig.v, [1])) for sig in pack])
     return unpacked
 
 
 class NNetwork:
+    u"""
+    Нейросеть
+    Содержит в себе слой нейронов:
+    iorder - кол-во нейронов во входном слое
+    lorder - кол-во нейронов в скрытом слое
+    oorder - кол-во нейронов в выходном слое
+    Между слоями нейронов связана векторами нейросигналов:
+    VLii - между входным и скрытым, lorder сигналов по iorder значений
+    VL1 - между скрытым и выходным, oorder сигналов по lorder значений
+    VLoo - за выходным, oorder сигналов по oorder значений
+    """
     def __init__(self, iorder, lorder, oorder):
-        # Входной слой нейронов
-        self.Lii = [Neuron(1) for _ in xrange(iorder)]
-        # Промежуточный слой нейронов
-        self.L1 = [Neuron(iorder + 1) for _ in xrange(lorder)]
-        # Выходной слой нейронов
-        self.Loo = [Neuron(lorder + 1) for _ in xrange(oorder)]
-        # Временная переменная хранения входного вектора
-        self.Vii = np.array([])
-        # Вектор значений выходов входного слоя
-        self.VLii = [NSignal(iorder) for _ in xrange(lorder)]
-        # Вектор значений выходов промежуточного слоя
-        self.VL1 = [NSignal(lorder) for _ in xrange(oorder)]
-        # Вектор значений выходов выходного слоя
-        self.VLoo = [NSignal(1) for _ in xrange(oorder)]
+        self.Lii = [Neuron(1) for _ in xrange(iorder)]  # Входной слой
+        self.L1 = [Neuron(iorder + 1) for _ in xrange(lorder)]  # Скрытый слой
+        self.Loo = [Neuron(lorder + 1) for _ in xrange(oorder)]  # Выходной слой
+        self.Vii = np.array([])  # Слой для временного хранения входных данных
+        self.VLii = [NSignal(iorder) for _ in xrange(lorder)]  # Вектор входного слоя
+        self.VL1 = [NSignal(lorder) for _ in xrange(oorder)]  # Вектор скрытого слоя
+        self.VLoo = [NSignal(1) for _ in xrange(oorder)]  # Вектор выходного слоя
 
-    # Установка количества переменных во входном слое
     def cfg_input(self, order):
+        u"""Установка количества переменных во входном слое"""
         self.Lii = [Neuron(order) for _ in self.Lii]
 
     def cfg_mass(self):
+        u"""
+        Задаёт нулевую инерцию свободным членам суммы
+        обязателен к выполнению
+        """
         for neur in self.L1:
             template = np.ones([neur.Vw.m.size])
             template[-1] = 0
@@ -142,22 +162,29 @@ class NNetwork:
             neur.Vw.m = template
 
     def forward(self, ii):  # Прямой прогон
+        u"""
+        Прямой расчёт сети по слоям нейронов
+        Записывает все рассчитанные значения
+        Выдаёт результат расчёта сети
+        """
         self.Vii = np.array(ii)
         for VLii in self.VLii:
-            VLii.v = np.array([Neurii.forward(self.Vii)
-                               for Neurii in self.Lii])
+            VLii.v = np.array([Neurii.forward(self.Vii) for Neurii in self.Lii])
         for VL1 in self.VL1:
-            VL1.v = np.array([NeurL1.forward(v) for NeurL1, v
-                              in zip(self.L1, unpackval(self.VLii))])
+            VL1.v = np.array([NeurL1.forward(v) for NeurL1, v in zip(self.L1, unpackval(self.VLii))])
         for VLoo in self.VLoo:
-            VLoo.v = np.array([Neuroo.forward(v) for Neuroo, v
-                               in zip(self.Loo, unpackval(self.VL1))])
+            VLoo.v = np.array([Neuroo.forward(v) for Neuroo, v in zip(self.Loo, unpackval(self.VL1))])
 
     def getnetgrad(self, val):  # Запись градиентов в выходные связи
-        for neur, val in zip(self.Loo, val):
-            neur.getgrad(val, appr='target')
+        u"""Записывает выходные градиенты в нейроны выходного слоя"""
+        for neur, val in zip(self.Loo, val): neur.getgrad(val, appr='target')
 
     def backward(self):  # Обратный прогон
+        u"""
+        Обратный расчёт сети по слоям нейронов
+        Рассчитывает и записывает все градиенты
+        Ничего не возвращает
+        """
         for VL1, neur in zip(self.VL1, self.Loo):
             VL1.g = neur.backward()
         for neur, g in zip(self.L1, unpackgrad(self.VL1).T):
@@ -171,6 +198,7 @@ class NNetwork:
 
     # Запись весов
     def ncommit(self):
+        u"""Производит корректировку весов"""
         for neur in self.Loo:
             neur.commit()
         for neur in self.L1:
@@ -179,12 +207,14 @@ class NNetwork:
             neur.commit()
 
     def nwgh_reset(self, val):
+        u"""Устанавливает все веса нейронов на одно значение"""
         for neurii, neurl1, neuroo in zip(self.Lii, self.L1, self.Loo):
             neurii.wgh_tune(val, 0)
             neurl1.wgh_tune(val, 0)
             neuroo.wgh_tune(val, 0)
 
     def nwgh_randomize(self, offset, scale):
+        u"""Устанавливает все веса нейронов в диапазоне одного значения"""
         for neurii in self.Lii:
             neurii.wgh_tune(offset, scale)
         for neurl1 in self.L1:
