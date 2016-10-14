@@ -5,6 +5,9 @@
 import numpy as np
 
 
+class ListSizeError(ValueError): pass
+
+
 def actfunc(val):
     u""""Функция активации"""
     if val > 0:
@@ -47,7 +50,10 @@ class Neuron:
         return 1 - np.exp(-self.expscale * np.power(x - t, 2))
 
     def dererrfunc(self, t, x):
-        u"""Производная функции ошибки, возвращает -2b(x-t)e^(-b(x-t)^2)"""
+        u"""
+        Производная функции ошибки, возвращает -2b(x-t)e^(-b(x-t)^2)
+        На данный момент возвращает функцию ошибки
+        """
         # return -2 * self.expscale\
         #         * (x - t)\
         #         * self.errfunc(t, x)
@@ -68,7 +74,7 @@ class Neuron:
     def forward(self, ii):
         u"""Рассчитывает и возвращает выход нейрона"""
         if len(ii) != self.Vii.v.size:
-            raise RuntimeError('V-input size mismatch!')
+            raise ListSizeError('V-input size mismatch!')
         self.Vii.v = np.array(ii)
         self.Viws.v = np.sum(self.Vii.v * self.Vw.v)
         self.Voo.v = actfunc(self.Viws.v)
