@@ -5,7 +5,8 @@
 import numpy as np
 
 
-class ListSizeError(ValueError): pass
+class ListSizeError(ValueError):
+    pass
 
 
 def actfunc(val):
@@ -110,21 +111,24 @@ class Neuron:
         self.Vw.v = np.array([val + (np.random.rand() * 2 - 1) * randval for _ in self.Vw.v])
 
 
-def unpackgrad(pack):
+def unpackgrad(vector):
     u"""
     Вытаскивает градиенты из слоя сигналов
     Применяется в основном к промежуточным слоям сигналов
+    :param vector: - вектор NSignal (например, соединяющий слой)
+    :return:
     """
-    unpacked = np.array([sig.g for sig in pack])
+    unpacked = np.array([sig.g for sig in vector])
     return unpacked
 
 
-def unpackval(pack):
+def unpackval(vector):
     u"""
     Вытаскивает значения из слоя сигналов
     Применяется в основном к промежуточным слоям сигналов
+    :param vector: - вектор NSignal (например, промежуточный слой)
     """
-    unpacked = np.array([np.concatenate((sig.v, [1])) for sig in pack])
+    unpacked = np.array([np.concatenate((sig.v, [1])) for sig in vector])
     return unpacked
 
 
@@ -180,10 +184,12 @@ class NNetwork:
             VL1.v = np.array([NeurL1.forward(v) for NeurL1, v in zip(self.L1, unpackval(self.VLii))])
         for VLoo in self.VLoo:
             VLoo.v = np.array([Neuroo.forward(v) for Neuroo, v in zip(self.Loo, unpackval(self.VL1))])
+        return unpackval(self.VLoo)
 
     def getnetgrad(self, val):  # Запись градиентов в выходные связи
         u"""Записывает выходные градиенты в нейроны выходного слоя"""
-        for neur, val in zip(self.Loo, val): neur.getgrad(val, appr='target')
+        for neur, val in zip(self.Loo, val):
+            neur.getgrad(val, appr='target')
 
     def backward(self):  # Обратный прогон
         u"""
@@ -214,13 +220,15 @@ class NNetwork:
 
     def nwgh_reset(self, val):
         u"""Устанавливает все веса нейронов на одно значение"""
-        for neurii, neurl1, neuroo in zip(self.Lii, self.L1, self.Loo):
+        for neurii in self.Lii:
             neurii.wgh_tune(val, 0)
+        for neurl1 in self.L1:
             neurl1.wgh_tune(val, 0)
+        for neuroo in self.Loo:
             neuroo.wgh_tune(val, 0)
 
     def nwgh_randomize(self, offset, scale):
-        u"""Устанавливает все веса нейронов в диапазоне одного значения"""
+        u"""Устанавливает все веса нейронов в диапазоне одного значения: offset +- scale"""
         for neurii in self.Lii:
             neurii.wgh_tune(offset, scale)
         for neurl1 in self.L1:

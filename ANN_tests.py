@@ -85,7 +85,12 @@ class NeuronTest(unittest.TestCase):
         for t in np.linspace(-100, 100, 200):
             neur.Voo.v = t
             neur.getgrad(0, appr='target')
-            self.assertEqual(neur.Voo.g, neur.errfunc(0, t))
+            if t < 0:
+                # self.assertEqual(neur.Voo.g, neur.errfunc(t, 0))
+                self.assertTrue(0 < neur.Voo.g <= 1)
+            else:
+                # self.assertEqual(neur.Voo.g, -1 * neur.errfunc(t, 0))
+                self.assertTrue(-1 <= neur.Voo.g < 0)
 
     def test_forward_pos(self):
         u"""
@@ -102,7 +107,8 @@ class NeuronTest(unittest.TestCase):
             neur = ann.Neuron(t)
             neur.wgh_tune(1., 0)
             neur.forward([pick for _ in xrange(t)])
-            self.assertEqual(neur.Voo.v, pick * t)
+            # self.assertEqual(neur.Voo.v, pick * t)
+            self.assertAlmostEqual(neur.Voo.v, pick * t)
 
     def test_forward_neg(self):
         u"""
@@ -114,12 +120,12 @@ class NeuronTest(unittest.TestCase):
             neur = ann.Neuron(t)
             neur.wgh_tune(1., 0)
             neur.forward([-1.0 for _ in xrange(t)])
-            self.assertEqual(0.01 * neur.Voo.v, -1 * t)
-        for pick in [0, 1., 12.3, -5, -1922.4, 200]:
+            self.assertEqual(neur.Voo.v, -0.01 * t)
+        for pick in [1., 12.3, 5, 1922.4, 200]:
             neur = ann.Neuron(t)
             neur.wgh_tune(1., 0)
             neur.forward([-1 * pick for _ in xrange(t)])
-            self.assertEqual(0.01 * neur.Voo.v, -1 * pick * t)
+            self.assertAlmostEqual(neur.Voo.v, -0.01 * pick * t)
 
     def test_backward_pospos(self):
         u"""
@@ -151,7 +157,7 @@ class NeuronTest(unittest.TestCase):
         neur.forward([1.])
         neur.getgrad(np.array([0.]))
         neur.backward()
-        [self.assertLess(t, 0) for t in neur.Vw.g]
+        [self.assertLessEqual(t, 0) for t in neur.Vw.g]
 
     def test_backward_negneg(self):
         u"""Градиент веса меньше нуля при положительном градиенте и отрицательном входе"""
@@ -160,26 +166,26 @@ class NeuronTest(unittest.TestCase):
         neur.forward([-1.])
         neur.getgrad(np.array([0.]))
         neur.backward()
-        [self.assertGreater(t, 0) for t in neur.Vw.g]
+        [self.assertGreaterEqual(t, 0) for t in neur.Vw.g]
 
     def test_commit_gradneg(self):
         u"""Вес должен уменьшится при отрицательном градиенте"""
         neur = ann.Neuron(1)
         neur.wgh_tune(1., 0)
-        old_wgh = neur.Vw.v.tolist()
+        old_wgh = list(neur.Vw.v)
         neur.forward([1.])
-        neur.getgrad(np.array([0.]))
+        neur.getgrad(0, appr='target')
         neur.backward()
         neur.commit()
-        self.assertLess(neur.Vw.v.tolist(), old_wgh)
+        self.assertLess(list(neur.Vw.v), old_wgh)
 
     def test_commit_gradpos(self):
-        u"""Вес должен уменьшится при отрицательном градиенте"""
+        u"""Вес должен увеличиться при положительном градиенте"""
         neur = ann.Neuron(1.)
         neur.wgh_tune(1., 0)
         old_wgh = neur.Vw.v.tolist()
         neur.forward([1.])
-        neur.getgrad(np.array([2.]))
+        neur.getgrad(2, appr='target')
         neur.backward()
         neur.commit()
         self.assertGreater(neur.Vw.v.tolist(), old_wgh)
@@ -198,10 +204,10 @@ class NeuronTest(unittest.TestCase):
     def test_wgh_tune(self):
         u"""Второй аргумент должен рандомизировать вес около определённого значения"""
         neur = ann.Neuron(1)
-        for pick in [0, 1., 12.3, -5, -1922.4, 200]:
+        for pick in [1., 12.3, 5, 1922.4, 200]:
             neur.wgh_tune(0, pick)
-            self.assertNotEqual(neur.Vw.v, [pick])
-            self.assertTrue(0 - pick / 2 < neur.Vw.v[0] < 0 + pick / 2)
+            # self.assertNotEqual(list(neur.Vw.v), [pick])
+            self.assertTrue(0 - pick < neur.Vw.v[0] < 0 + pick)
 
     def test_wronglistlength(self):
         u"""forward должен принимать ровно столько входных значений, сколько у него входов"""
@@ -257,11 +263,10 @@ class NNetworkTest(unittest.TestCase):
             nw = ann.NNetwork(a, b, c)
             nw.cfg_mass()
             for neur in nw.L1:
-                self.assertEqual(0, neur.Vw.v[-1])
+                self.assertEqual(0, neur.Vw.m[-1])
             for neur in nw.Loo:
-                self.assertEqual(0, neur.Vw.v[-1])
+                self.assertEqual(0, neur.Vw.m[-1])
 
-# TODO: Тест на прямой расчёт
     def test_forward(self):
         u"""
         Прямой расчёт должен выдавать детермированное значение
@@ -270,25 +275,79 @@ class NNetworkTest(unittest.TestCase):
         nw1 = ann.NNetwork(1, 2, 1)
         nw1.nwgh_reset(1)
         res = nw1.forward([10])
-        self.assertEqual(23, res)
+        self.assertListEqual([23., 1.], res[0].tolist())  # unpackval добавляет свободную единицу к распакованому вектору значений
         nw2 = ann.NNetwork(1, 2, 1)
         nw2.nwgh_reset(2.5)
         res = nw2.forward([2.2])
-        self.assertEqual(83.75, res)
+        self.assertListEqual([83.75, 1.], res[0].tolist())
 
-# TODO: Тест на getgrad
     def test_ngetgrad(self):
         a, b, c = np.random.randint(1, 10, 3)
         nw = ann.NNetwork(a, b, c)
 
-# TODO: Тест на обратный расчёт
-# TODO: Тест на корректировку весов
-# TODO: Тест на установку весов в слоях
-# TODO: Тест на рандомизацию весов в слоях
-# TODO: Тест на полный расчёт сети вперёд-назад-вперёд
-# TODO: Тест на полный расчёт сети вперёд-назад-вперёд-назад-вперёд
-# TODO: Тест на распаковку значений вектора
-# TODO: Тест на распаковку градиентов вектора
+    def test_backward(self):
+        u"""
+        В обратном расчёте должны быть определенные значения градиентов
+        В обратном расчёте должны быть определенные значения весов после расчёта градиентов
+        """
+        nw1 = ann.NNetwork(1, 2, 1)
+        nw1.nwgh_reset(1)
+        nw1.forward([10])
+        nw1.getnetgrad([0])
+        nw1.backward()
+        self.assertEqual(20, nw1.Lii[0].Vw.g[0])
+        self.assertEqual(10, nw1.L1[0].Vw.g[0])
+        self.assertEqual(1, nw1.L1[0].Vw.g[1])
+        self.assertEqual(10, nw1.L1[1].Vw.g[0])
+        self.assertEqual(1, nw1.L1[1].Vw.g[1])
+        self.assertEqual(11, nw1.Loo[0].Vw.g[0])
+        self.assertEqual(11, nw1.Loo[0].Vw.g[1])
+        self.assertEqual(1, nw1.Loo[0].Vw.g[2])
+        nw1.ncommit()
+        self.assertEqual(1.2, nw1.Lii[0].Vw.v[0])
+        self.assertEqual(1.1, nw1.L1[0].Vw.v[0])
+        self.assertEqual(1.01, nw1.L1[0].Vw.v[1])
+        self.assertEqual(1.1, nw1.L1[1].Vw.v[0])
+        self.assertEqual(1.01, nw1.L1[0].Vw.v[1])
+        self.assertEqual(1.11, nw1.Loo[0].Vw.v[0])
+        self.assertEqual(1.11, nw1.Loo[0].Vw.v[1])
+        self.assertEqual(1.01, nw1.Loo[0].Vw.v[2])
+        nw2 = ann.NNetwork(1, 2, 1)
+        nw2.nwgh_reset(3.2)
+        nw2.forward([4.6])
+        nw2.backward()
+        self.assertAlmostEqual(94.208, nw2.Lii[0].Vw.g[0])
+        self.assertAlmostEqual(47.104, nw2.L1[0].Vw.g[0])
+        self.assertAlmostEqual(3.2, nw2.L1[0].Vw.g[1])
+        self.assertAlmostEqual(47.104, nw2.L1[1].Vw.g[0])
+        self.assertAlmostEqual(3.2, nw2.L1[1].Vw.g[1])
+        self.assertAlmostEqual(50.304, nw2.Loo[0].Vw.g[0])
+        self.assertAlmostEqual(50.304, nw2.Loo[0].Vw.g[1])
+        self.assertAlmostEqual(1, nw2.Loo[0].Vw.g[2])
+        nw2.ncommit()
+        self.assertAlmostEqual(4.14208, nw2.Lii[0].Vw.v[0])
+        self.assertAlmostEqual(3.67104, nw2.L1[0].Vw.v[0])
+        self.assertAlmostEqual(3.232, nw2.L1[0].Vw.v[1])
+        self.assertAlmostEqual(3.67104, nw2.L1[1].Vw.v[0])
+        self.assertAlmostEqual(3.232, nw2.L1[0].Vw.v[1])
+        self.assertAlmostEqual(3.70304, nw2.Loo[0].Vw.v[0])
+        self.assertAlmostEqual(3.70304, nw2.Loo[0].Vw.v[1])
+        self.assertAlmostEqual(3.21, nw2.Loo[0].Vw.v[2])
 
-if __name__ == '__main__':
-    unittest.main()
+# TODO: Тест на установку весов в слоях
+    def test_nwghreset(self):
+        """
+        После вызова wgh_reset все веса сети должны установиться на определённое значение
+        """
+        nw1 = ann.NNetwork(1, 2, 1)
+        nw1.nwgh_reset(1)
+        self.assertListEqual([1], list(nw1.Lii[0].Vw.v))
+        self.assertListEqual([1, 1], list(nw1.L1[0].Vw.v))
+        self.assertListEqual([1, 1], list(nw1.L1[1].Vw.v))
+        self.assertListEqual([1, 1, 1], list(nw1.Loo[0].Vw.v))
+        nw2 = ann.NNetwork(1, 2, 1)
+        nw2.nwgh_reset(5.5)
+        self.assertListEqual([5.5], list(nw2.Lii[0].Vw.v))
+        self.assertListEqual([5.5, 5.5], list(nw2.L1[0].Vw.v))
+        self.assertListEqual([5.5, 5.5], list(nw2.L1[1].Vw.v))
+        self.assertListEqual([5.5, 5.5, 5.5], list(nw2.Loo[0].Vw.v))
