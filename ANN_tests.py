@@ -307,7 +307,7 @@ class NNetworkTest(unittest.TestCase):
         self.assertEqual(0.8, nw1.Lii[0].Vw.v[0])
         self.assertEqual(0.9, nw1.L1[0].Vw.v[0])
         self.assertEqual(0.99, nw1.L1[0].Vw.v[1])
-        self.assertEqual(0.9, nw1.L1[1].Vw.v[0])
+        self.assertEqual(0.9, nw1.L1[1].Vw.v[0])1
         self.assertEqual(0.99, nw1.L1[0].Vw.v[1])
         self.assertEqual(0.89, nw1.Loo[0].Vw.v[0])
         self.assertEqual(0.89, nw1.Loo[0].Vw.v[1])

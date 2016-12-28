@@ -9,19 +9,6 @@ class ListSizeError(ValueError):
     pass
 
 
-def actfunc(val):
-    u""""Функция активации"""
-    if val > 0:
-        return val
-    else:
-        return 0.01 * val
-
-
-def deractfunc(val):
-    u""""Производная функции активации"""
-    return (0.01, 1)[val > 0]
-
-
 class NSignal:
     u"""Нейросигнал, содержит в себе значение, градиент и инерцию"""
     def __init__(self, inputs):
@@ -40,6 +27,7 @@ class Neuron:
         self.pullback = 0  # Величина упругого возвращения весов
         self.deltaT = 0.01  # Скорость обучения
         self.expscale = 1  # Крутизна экспоненты
+        self.type = 'relu'  # Тип используемой нелинейности
         self.Vii = NSignal(cii)  # Массив входов
         self.Vw = NSignal(cii)  # Массив взвешенных входов
         self.Viws = NSignal(1)  # Суммированный сигнал
@@ -60,6 +48,27 @@ class Neuron:
         #         * self.errfunc(t, x)
         return self.errfunc(t, x)
 
+    def actfunc(self, val, type='relu'):
+        u""""
+        Функция активации
+        :val: входное значение
+        :type: ('relu'/любой) выбор нелинейности"""
+        # if val > 0:
+        #     return val
+        # elif type=='relu':  # Ректифицированная нелинейность
+        #     # return 0.01 * val
+        #     # return 0.5 * val
+        #     return 0
+        if self.type == 'relu':
+            return max(0, val)
+        else:
+            return val  # Без изменения
+
+
+    def deractfunc(self, val):
+        u""""Производная функции активации"""
+        return (0, 1)[val > 0]
+
     def getgrad(self, tt=float, appr='direct'):
         u"""Присваивает внешние градиенты выходным сигналам"""
         self.Vt = tt
@@ -78,13 +87,13 @@ class Neuron:
             raise ListSizeError('V-input size mismatch!')
         self.Vii.v = np.array(ii)
         self.Viws.v = np.sum(self.Vii.v * self.Vw.v)
-        self.Voo.v = actfunc(self.Viws.v)
+        self.Voo.v = self.actfunc(self.Viws.v, self.type)
         return self.Voo.v
 
     def backward(self):
         u"""рассчитывает градиенты на всех сигналах"""
         # Получение градиента iws
-        self.Viws.g = self.Voo.g.sum() * deractfunc(self.Viws.v)
+        self.Viws.g = self.Voo.g.sum() * self.deractfunc(self.Viws.v)
         # Получение градиента весов
         self.Vw.g = self.Vii.v * self.Viws.g
         # Получение градиента входов
@@ -156,6 +165,15 @@ class NNetwork:
     def cfg_input(self, order):
         u"""Установка количества переменных во входном слое"""
         self.Lii = [Neuron(order) for _ in self.Lii]
+
+    def cfg_type(self):
+        u"""
+        Устанавливает отсутствие нелинейности на некоторых нейронах
+        """
+        for neur in self.Lii:
+            neur.type = 'linear'
+        for neur in self.Loo:
+            neur.type = 'linear'
 
     def cfg_mass(self):
         u"""
@@ -235,3 +253,9 @@ class NNetwork:
             neurl1.wgh_tune(offset, scale)
         for neuroo in self.Loo:
             neuroo.wgh_tune(offset, scale)
+
+    def visualize(self):
+        u"""Визуализирует текущее состояние сети"""
+        print u'--- Входной слой --- Данные выше ---'
+        for neur in self.Lii:
+            print u'Neuron 1'
