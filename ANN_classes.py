@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # ANN_classes.py
 # Классы для нейросети
+# Переписано для python 3.6
 
 import numpy as np
 version = '0.10.0'
@@ -140,7 +141,9 @@ def unpackval(vector):
     Применяется в основном к промежуточным слоям сигналов
     :param vector: - вектор NSignal (например, промежуточный слой)
     """
-    unpacked = np.array([np.concatenate((sig.v, [1])) for sig in vector])
+    # unpackval не отображает фиксированную единицу в слоях, поскольку
+    #   она прописана в самой сети
+    unpacked = np.array([np.concatenate((sig.v, [1])) for sig in pack])
     return unpacked
 
 
