@@ -24,7 +24,7 @@ class Neuron:
     """
     def __init__(self, cii):
         self.shake = 0.1  # Величина встряхивания весов
-        self.pullback = 0  # Величина упругого возвращения весов
+        self.pullback = 0.2  # Величина упругого возвращения весов
         self.deltaT = 0.01  # Скорость обучения
         self.expscale = 1  # Крутизна экспоненты
         self.type = 'relu'  # Тип используемой нелинейности
@@ -67,19 +67,22 @@ class Neuron:
 
     def deractfunc(self, val):
         u""""Производная функции активации"""
-        return (0, 1)[val > 0]
+        # return (0, 1)[val > 0]
+        return 1
 
     def getgrad(self, tt=float, appr='direct'):
         u"""Присваивает внешние градиенты выходным сигналам"""
         self.Vt = tt
         if appr == 'direct':  # Прямой перенос по связям
             self.Voo.g = 1 * self.Vt
+            self.pullback = 0.1 * abs(self.Vt)
         if appr == 'target':  # Вычисление расстояния до цели
             # gr = 1 - np.exp(-self.expscale * np.power(self.Voo.v - self.Vt, 2))
             if self.Vt - self.Voo.v > 0:
                 self.Voo.g = self.dererrfunc(self.Vt, self.Voo.v)
             else:
                 self.Voo.g = -1 * self.dererrfunc(self.Vt, self.Voo.v)
+            self.pullback = 0.1 * abs(self.dererrfunc(self.Vt, self.Voo.v))
 
     def forward(self, ii):
         u"""Рассчитывает и возвращает выход нейрона"""
@@ -102,10 +105,10 @@ class Neuron:
 
     def commit(self):
         u"""Корректирует значения весов"""
-        # Упругое возвращение весов к нулю (с учётом инерции)
-        self.Vw.g += -self.Vw.v * self.Vw.m * self.pullback
         # Корректировка весов
         self.Vw.v += self.Vw.g * self.deltaT
+        # Упругое возвращение весов к нулю (с учётом инерции)
+        self.Vw.v += -self.Vw.v * self.Vw.m * self.pullback
         # Встряхивание весов (эл-ты с нулевой инерцией невосприимчивы"
         # self.Vw.v += self.Vw.g \
         #     * self.shake \

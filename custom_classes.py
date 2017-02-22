@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
 # Пользовательские классы
+# Версия 0.2.1
 
 import numpy as np
 from scipy.stats import chi2, t
 
 
-# Класс StatWorker - обработка данных эксперимента
 class StatWorker():
+    '''
+    Класс StatWorker - обработка данных эксперимента
+    '''
     def __init__(self):
         self.alpha=0.05
         self.zstar = 2.326
@@ -18,8 +21,10 @@ class StatWorker():
             raise RuntimeError('StatWorker: something went wrong! Exactly: {}'.format(msg))
 
 
-    # Выдаёт таблицу z*
     def zstar_help(self):
+        '''
+        Выдаёт таблицу z*
+        '''
         print '| alpha |   z*  |\n' \
               '|-------|-------|\n' \
               '|  99%  | 2.576 |\n' \
@@ -36,30 +41,43 @@ class StatWorker():
     def set_zstar(self, zstar):
         self.zstar = zstar
 
-    # Проверка на правильный тип массива
     def check(self, data):
+        '''
+        Проверка на правильный тип массива
+        '''
         if type(data) != np.ndarray:
             raise TypeError('StatWorker: incoming data should be ndarray type!')
 
-    # Исключение точек, имеющих отклонение более, чем три сигма
-    def clean3sigma(self, data):
+    def clean3sigma(self, data, mask=True):
+        '''
+        Исключение точек, имеющих отклонение более, чем три сигма
+        '''
         self.check(data)
         data_mean = data.mean()
         data_std = data.std()
         data_mask = np.abs(data - data_mean) < data_std
-        return data_mask
+        if mask:
+            return data_mask
+        else:
+            return data[data_mask]
 
-    # Функция определения средней точки интервала
     def var_interv(self, data):
+        '''
+        Функция определения средней точки интервала
+        '''
         self.check(data)
         return np.array([(data[i] + data[i + 1]) / 2 for i in xrange(len(data) - 1)])
 
-    # Функция phi(u) - нормальное распределение
     def phi(self, u):
+        '''
+        Функция phi(u) - нормальное распределение
+        '''
         return 1 / np.sqrt(2 * np.pi) * np.power(np.e, -np.square(u) / 2)
 
-    # Определение критерия Пирсена для проверки гипотезы о нормлальном распределении
     def chi2test(self, data, dtype='data'):
+        '''
+        Определение критерия Пирсена для проверки гипотезы о нормлальном распределении
+        '''
         if dtype == 'data':
             self.check(data)
             (freq, ranges) = np.histogram(data)  # Получаем гистограмму и диапазоны
@@ -91,8 +109,10 @@ class StatWorker():
             'H0': chi2exp < chi2Cr
         }
 
-    # Построение доверительного интервала
     def conf_level(self, data, method='std'):
+        '''
+        Построение доверительного интервала
+        '''
         self.check(data)
         conf_lower = None
         conf_upper = None
@@ -140,5 +160,33 @@ class StatWorker():
                 mask = np.append(mask, [False])
         return mask
 
+# Гидрогазодинамические функции и функции гидрогазодинамики
+class GGazWorker():
+    def __init__(self):
+        self.k_air = 1.4
+
+    def pi_lambda(self, g_lambda):
+        u'''
+        pi(lambda): расчёт безразмерного давления от безразмерной скорости
+        '''
+        return pow((1-(self.k_air-1)/(self.k_air+1)*pow(g_lambda,2)),self.k_air/(self.k_air-1))
+
+    def lambda_pi(self, g_pi):
+        u'''
+        lambda(pi): расчёт безразмерной скорости от безразмерного давления
+        '''
+        return pow((1-pow(g_pi,(self.k_air-1)/self.k_air))*(self.k_air+1)/(self.k_air-1),0.5)
+
+    def q_lambda(self, g_lambda):
+        u'''
+        q(lambda): расчёт безразмерного расхода от безразмерной скорости
+        '''
+        return pow((self.k_air+1)/2,1/(self.k_air-1))*g_lambda*pow((1-(self.k_air-1)/(self.k_air+1)*pow(g_lambda,2)),1/(self.k_air-1))
 
 
+# Полускрипт на вывод пронумерованных параметров
+def print_numbered(itemlist):
+    i = 0
+    for item in itemlist:
+        print str(i) +'\t'+ item
+        i+=1
