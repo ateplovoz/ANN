@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # ANN_classes.py
 # Классы для нейросети
+# Переписано для python 3.6
 
 import numpy as np
 
@@ -124,6 +125,8 @@ def unpackval(pack):
     Вытаскивает значения из слоя сигналов
     Применяется в основном к промежуточным слоям сигналов
     """
+    # unpackval не отображает фиксированную единицу в слоях, поскольку
+    #   она прописана в самой сети
     unpacked = np.array([np.concatenate((sig.v, [1])) for sig in pack])
     return unpacked
 
@@ -141,13 +144,13 @@ class NNetwork:
     VLoo - за выходным, oorder сигналов по oorder значений
     """
     def __init__(self, iorder, lorder, oorder):
-        self.Lii = [Neuron(1) for _ in xrange(iorder)]  # Входной слой
-        self.L1 = [Neuron(iorder + 1) for _ in xrange(lorder)]  # Скрытый слой
-        self.Loo = [Neuron(lorder + 1) for _ in xrange(oorder)]  # Выходной слой
+        self.Lii = [Neuron(1) for _ in range(iorder)]  # Входной слой
+        self.L1 = [Neuron(iorder + 1) for _ in range(lorder)]  # Скрытый слой
+        self.Loo = [Neuron(lorder + 1) for _ in range(oorder)]  # Выходной слой
         self.Vii = np.array([])  # Слой для временного хранения входных данных
-        self.VLii = [NSignal(iorder) for _ in xrange(lorder)]  # Вектор входного слоя
-        self.VL1 = [NSignal(lorder) for _ in xrange(oorder)]  # Вектор скрытого слоя
-        self.VLoo = [NSignal(1) for _ in xrange(oorder)]  # Вектор выходного слоя
+        self.VLii = [NSignal(iorder) for _ in range(lorder)]  # Вектор входного слоя
+        self.VL1 = [NSignal(lorder) for _ in range(oorder)]  # Вектор скрытого слоя
+        self.VLoo = [NSignal(1) for _ in range(oorder)]  # Вектор выходного слоя
 
     def cfg_input(self, order):
         u"""Установка количества переменных во входном слое"""
