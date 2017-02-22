@@ -3,7 +3,7 @@
 # Классы для нейросети
 
 import numpy as np
-
+version = '0.10.0'
 
 class ListSizeError(ValueError):
     pass
@@ -160,7 +160,7 @@ class NNetwork:
         self.Lii = [Neuron(1) for _ in xrange(iorder)]  # Входной слой
         self.L1 = [Neuron(iorder + 1) for _ in xrange(lorder)]  # Скрытый слой
         self.Loo = [Neuron(lorder + 1) for _ in xrange(oorder)]  # Выходной слой
-        self.Vii = np.array([])  # Слой для временного хранения входных данных
+        selfVii = np.array([])  # Слой для временного хранения входных данных
         self.VLii = [NSignal(iorder) for _ in xrange(lorder)]  # Вектор входного слоя
         self.VL1 = [NSignal(lorder) for _ in xrange(oorder)]  # Вектор скрытого слоя
         self.VLoo = [NSignal(1) for _ in xrange(oorder)]  # Вектор выходного слоя
@@ -256,9 +256,3 @@ class NNetwork:
             neurl1.wgh_tune(offset, scale)
         for neuroo in self.Loo:
             neuroo.wgh_tune(offset, scale)
-
-    def visualize(self):
-        u"""Визуализирует текущее состояние сети"""
-        print u'--- Входной слой --- Данные выше ---'
-        for neur in self.Lii:
-            print u'Neuron 1'
