@@ -15,7 +15,7 @@ def vercheck(req):
         print("ANN vercheck OK")
     else:
         print("ANN vercheck NOT OK: got: {0}, required: {1}"
-                .format(req, version))
+                .format(version, req))
 
 class ListSizeError(ValueError):
     pass
@@ -80,7 +80,8 @@ class Neuron:
     def deractfunc(self, val):
         u""""Производная функции активации"""
         # return (0, 1)[val > 0]
-        return 1
+        return max(0, val)
+        # return 1
 
     def getgrad(self, tt=float, appr='direct'):
         u"""Присваивает внешние градиенты выходным сигналам"""
@@ -122,10 +123,10 @@ class Neuron:
         self.Vw.v += self.Vw.g * self.deltaT
         # Упругое возвращение весов к нулю (с учётом инерции)
         self.Vw.v += -self.Vw.v * self.Vw.m * self.pullback
-        # Встряхивание весов (эл-ты с нулевой инерцией невосприимчивы"
+        # Встряхивание весов (эл-ты с нулевой инерцией невосприимчивы
         # self.Vw.v += self.Vw.g \
-        #     * self.shake \
-        #     * (np.random.random(len(self.Vw.g)) * 2 - 1)
+        #    * self.shake \
+        #    * (np.random.random(len(self.Vw.g)) * 2 - 1)
 
     def wgh_tune(self, val, randval):
         u"""
