@@ -4,7 +4,7 @@
 # Переписано для python 3.6
 
 import numpy as np
-version = '0.10.0'
+version = '0.10.0-test'
 
 def vercheck(req):
     u"""
@@ -35,10 +35,10 @@ class Neuron:
     Внутри себя связан нейросигналами (NSignal)
     """
     def __init__(self, cii):
-        self.shake = 0.1  # Величина встряхивания весов
+        self.shake = 0.01  # Величина встряхивания весов
         self.pullback = 0.2  # Величина упругого возвращения весов
         self.deltaT = 0.01  # Скорость обучения
-        self.expscale = 1  # Крутизна экспоненты
+        self.expscale = 1.  # Крутизна экспоненты
         self.type = 'relu'  # Тип используемой нелинейности
         self.Vii = NSignal(cii)  # Массив входов
         self.Vw = NSignal(cii)  # Массив взвешенных входов
@@ -79,8 +79,7 @@ class Neuron:
 
     def deractfunc(self, val):
         u""""Производная функции активации"""
-        # return (0, 1)[val > 0]
-        return max(0, val)
+        return (0, 1)[val > 0]
         # return 1
 
     def getgrad(self, tt=float, appr='direct'):
@@ -122,7 +121,7 @@ class Neuron:
         # Корректировка весов
         self.Vw.v += self.Vw.g * self.deltaT
         # Упругое возвращение весов к нулю (с учётом инерции)
-        self.Vw.v += -self.Vw.v * self.Vw.m * self.pullback
+        # self.Vw.v += -self.Vw.v * self.Vw.m * self.pullback
         # Встряхивание весов (эл-ты с нулевой инерцией невосприимчивы
         # self.Vw.v += self.Vw.g \
         #    * self.shake \
@@ -162,6 +161,118 @@ def unpackval(vector):
 
 # Необходимо переписать так, чтобы входные нейроны не учавствовали в обработке
 # данных сети, а только передавали соответствующие значения.
+
+class NNetwork_test:
+    u"""
+    Экспериментальный класс нейросети
+    Первый скрытый слой настраивается так, чтобы воспринимать Х входных
+    значений (задётся).
+    Последующие скрытые слои настраиваются автоматически.
+    В выходном слое задаётся количество выходов
+    """
+    def __init__(self, iorder, lorder, oorder):
+        self.VLii = np.array([0 for _ in range(iorder + 1)])
+        self.L1 = [Neuron(iorder + 1) for _ in range(lorder)]
+        self.VL1 = [NSignal(lorder) for _ in range(oorder)]
+        self.Loo = [Neuron(lorder) for _ in range(oorder)]
+        for neur in self.Loo:  # Отключение выпрямителя на вых. нейр.
+            neur.type = 'linear'
+        self.VLoo = [NSignal(1) for _ in range(oorder)]
+
+    def forward(self, ii):
+        u"""
+        Прямой расчёт сети
+        """
+        try:
+            iter(ii)
+        except TypeError:
+            raise TypeError(u'ii must be iterable')
+
+        # длина входного вектора уже учитывает в себе свободную единицу
+        if len(ii) != len(self.VLii) - 1:
+            raise TypeError(u'ii must be size as VLii')
+        else:
+            self.VLii = ii + [1]
+
+        # Скрытый слой
+        for v_out in self.VL1:
+            v_out.v = [neur.forward(self.VLii) for neur in self.L1]
+        # Выходной слой
+        for v_out in self.VLoo:
+            v_out.v = [neur.forward(v_in.v) for neur, v_in in zip(self.Loo,
+                self.VL1)]
+
+        return [self.getnetout(num) for num in range(len(self.VLoo))]
+
+    def getnetgrad(self, ntt):
+        u"""
+        Получение выходного градиента сети через функцию цели
+        """
+        try:
+            iter(ntt)
+        except TypeError:
+            raise TypeError('ntt must be iterable')
+        if len(ntt) != len(self.Loo):
+            raise TypeError('ntt must be same size as Loo')
+        for neur, tt in zip(self.Loo, ntt):
+            neur.getgrad(tt, appr='target')
+
+    def backward(self):
+        u"""
+        Обратный расчёт сети
+        """
+        for neur, vector in zip(self.Loo, self.VL1):
+            neur.backward()
+            vector.g = neur.Vii.g
+        for neuron in self.L1:  # сброс градиента
+            neuron.Voo.g = 0
+        for vector in self.VL1:
+            for neuron, grad in zip(self.L1, vector.g):
+                # суммирование градиентов со всех выходов
+                neuron.Voo.g += grad
+                neuron.backward()
+
+    def ncommit(self):
+        for neur in self.Loo:
+            neur.commit()
+        for neur in self.L1:
+            neur.commit()
+
+    def getnetout(self, num):
+        u"""
+        возвращает выход нейрона num выходного слоя
+        """
+        return self.VLoo[num].v
+
+    def nwgh_tune(self, val, randval):
+        u"""
+        Установка весов нейронов в диапазоне (val±randval)
+        """
+        for neur in self.L1:
+            neur.wgh_tune(val, randval)
+        for neur in self.Loo:
+            neur.wgh_tune(val, randval)
+
+    def nacc_tune(self, acc):
+        u"""
+        Установка осторожности нейронов нейросети
+        """
+        for neur in self.L1:
+            neur.deltaT = acc
+        for neur in self.Loo:
+            neur.deltaT = acc
+
+    def nexs_tune(self, exs):
+        u"""
+        Установка крутизны функции ошибки
+        """
+        for neur in self.L1:
+            neur.expscale = exs
+        for neur in self.Loo:
+            neur.expscale = exs
+
+
+
 class NNetwork:
     u"""
     Нейросеть
@@ -201,6 +312,9 @@ class NNetwork:
         Задаёт нулевую инерцию свободным членам суммы
         обязателен к выполнению
         """
+        for neur in self.Lii:
+            template = np.array([0 for _ in neur.Vw.m.size])
+            neur.Vw.m = template
         for neur in self.L1:
             template = np.ones([neur.Vw.m.size])
             template[-1] = 0
