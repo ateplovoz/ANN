@@ -72,7 +72,11 @@ class Neuron:
         #     # return 0.5 * val
         #     return 0
         if self.type == 'relu':
-            return max(0, val)
+            # return max(0, val)
+            if val>0:
+                return val
+            else:
+                return 0.1*val
         else:
             return val  # Без изменения
 
@@ -388,3 +392,12 @@ class NNetwork:
             neurl1.wgh_tune(offset, scale)
         for neuroo in self.Loo:
             neuroo.wgh_tune(offset, scale)
+
+    def nacc_tune(self, acc):
+        u"""
+        Установка осторожности нейронов нейросети
+        """
+        for neur in self.L1:
+            neur.deltaT = acc
+        for neur in self.Loo:
+            neur.deltaT = acc
