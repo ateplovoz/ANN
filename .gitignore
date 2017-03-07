@@ -1,5 +1,6 @@
 .idea/
 .ipynb_checkpoints/
+.tf_graph*/
 *.sublime-*
 *.pyc
 *.swp
