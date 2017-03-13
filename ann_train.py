@@ -1,6 +1,7 @@
 # -*- coding=utf-8 -*-
 # ANN train and test code
 
+import ann_tf_classes
 import csv
 
 data = np.array([])
@@ -49,15 +50,34 @@ mln_layout = [10 for _ in range(10)]
 mln_tvn = NMLNetwork(inputs, mln_layout, name='tvn')
 mln_out = tf.add_n(mln_tvn.get_out())
 error = tf.pow(tt - mln_out, 2)
+tf.summary.scalar('error', error)
+mergsumm = tf.summary.merge_all()
 
 optim = tf.train.MomentumOptimizer()
-train.step = optim.minimize(error)
+train_step = optim.minimize(error)
 
 
 def get_feeder(pick, is_training=False):
     if is_training:
         return form_feeder(inputs + [tt], [gt_learn, gv_learn, n_learn], pick)
     else:
-        return form_feeder(inputs + [tt], [gt_test, gv_test, n_learn], pick)
+        return form_feeder(inputs + [tt], [gt_test, gv_test, n_test], pick)
 
+sess = tf.Session()
+sess.run(tf.global_variables_initializer())
+writer = tf.summary.FileWriter('graph', sess.graph)
+
+def train_net(runs, iterator, training=False):
+    if not(iterator):
+        raise RuntimeError('please define iterator')
+    for _ in range(runs):
+        if training:
+            pick = np.random.randint(len(n_learn))
+            feeder = get_feeder(pick, training)
+        else:
+            pick = np.random.randint(len(n_test))
+            feeder = get_feeder(pick, training)
+        summary, _ = sess.run([mergsumm, train_step], feed_dict=feeder)
+        iterator += 1
+        writer.add_summary(summary, iterator)
 
