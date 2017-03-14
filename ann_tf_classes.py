@@ -256,17 +256,32 @@ tt = tf.placeholder(tf.float32, name='target')
 mln_layout = [1 for _ in range(2)]
 mln_tvn = NMLNetwork(inputs, mln_layout, name='tvn')
 mln_out = tf.add_n(mln_tvn.get_out())
-error_sq = tf.pow(tt - mln_out, 2)
-error_exp = 1 - tf.exp(-tf.pow(tt - mln_out, 2))
-error_sig = (tt - mln_out)/(1 + tf.abs(tt - mln_out))
+# with tf.name_scope('error_sq'):
+#     error_sq = tf.squared_difference(tt, mln_out)
+#     tf.summary.scalar('error_sq', error_sq)
+# with tf.name_scope('error_exp'):
+#     error_exp = 1 - tf.exp(-tf.squared_difference(tt, mln_out))
+#     tf.summary.scalar('error_exp', error_exp)
+# with tf.name_scope('error_abs'):
+#     error_abs = (tt - mln_out)/(1 + tf.abs(tt - mln_out))
+#     tf.summary.scalar('error_abs', error_abs)
+# with tf.name_scope('error_root'):
+#     error_root = tf.sqrt(tf.squared_difference(tt, mln_out) - 1) - 1
+#     tf.summary.scalar('error_root', error_root)
+error_sq = tf.squared_difference(tt, mln_out)
+error_exp = 1 - tf.exp(-tf.squared_difference(tt, mln_out))
+error_abs = (tt - mln_out)/(1 + tf.abs(tt - mln_out))
+error_root = tf.sqrt(tf.squared_difference(tt, mln_out) - 1) - 1
 tf.summary.scalar('error_sq', error_sq)
 tf.summary.scalar('error_exp', error_exp)
-tf.summary.scalar('error_sig', error_sig)
+tf.summary.scalar('error_abs', error_abs)
+tf.summary.scalar('error_root', error_root)
 tf.summary.scalar('output', mln_out)
 mergsumm = tf.summary.merge_all()
+
 optim = tf.train.MomentumOptimizer(0.1, 0.9)
 # optim = tf.train.GradientDescentOptimizer(0.1)
-train_step = optim.minimize(error_sq)
+train_step = optim.minimize(error_root)
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
 curtime = datetime.strftime(datetime.now(), '%H%M%S')

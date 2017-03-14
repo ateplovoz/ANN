@@ -1,7 +1,6 @@
 # -*- coding=utf-8 -*-
 # ANN train and test code
 
-import ann_tf_classes
 import csv
 
 data = np.array([])
