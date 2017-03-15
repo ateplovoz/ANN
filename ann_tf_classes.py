@@ -3,8 +3,10 @@
 """Contains tensorflow ann classes and functions for data learning"""
 
 import csv
+import io
 from datetime import datetime
 import numpy as np
+import matplotlib.pyplot as plt
 import tensorflow as tf
 
 
@@ -192,7 +194,6 @@ class NMLNetwork():
         for layer in self.LL:
             layer.tune_weight(val, randval)
 
-
 def form_feeder(feed_who, feed_what, pick):
     """Forms dict_feed by selecting row from arrays
 
@@ -212,8 +213,102 @@ def form_feeder(feed_who, feed_what, pick):
         feeder[sink] = source[pick]
     return feeder
 
-data = np.array([])
+def get_feeder(pick, is_training=False):
+    """Returns dictionary mapped for placeholders, unique"""
+    if is_training:
+        return form_feeder(inputs + [tt], [gt_learn, gv_learn, n_learn], pick)
+    return form_feeder(inputs + [tt], [gt_test, gv_test, n_test], pick)
 
+def train_net(runs, iterator, training=False):
+    """Contains commands for training neural network, unique
+
+    Uses name "writer" for summary writer
+
+    Args:
+        runs: `int` how many iterations to perform
+        iterator: `int` external cumulative variable for iteration count
+        training: `bool` are we training the network or not?
+
+    Returns:
+        `int` of iteration count"""
+    if not iterator:
+        raise RuntimeError('please define iterator. or set it to non-zero')
+    for _ in range(runs):
+        if training:
+            pick = np.random.randint(len(n_learn))
+            feeder = get_feeder(pick, training)
+            sess.run(train_step, feed_dict=feeder)
+            summary = sess.run(mergsumm, feed_dict=feeder)
+        else:
+            pick = np.random.randint(len(n_test))
+            feeder = get_feeder(pick, training)
+            summary = sess.run(mergsumm, feed_dict=feeder)
+        iterator += 1
+        writer.add_summary(summary, iterator)
+    writer.flush()
+    return iterator
+
+def get_curve():
+    """Builds a sequence of ANN output for n_full
+
+    Forms an numpy.array for each value in n_full
+
+    Returns:
+        `numpy array` of shape (2, X)"""
+    res = np.array([])
+    for item in range(len(n_full)):
+        feeder = form_feeder(
+            inputs + [tt], [gt_full, gv_full, n_full], item)
+        res = np.append(res, sess.run(mln_out, feed_dict=feeder))
+    return res
+
+def get_plot(x, y, title=None, name=None):
+    """Generates pyplot plot and puts it to the summary
+
+    Uses matplotlib.pyplot to generate plot y(x), saves it to temporary buffer
+    and converts it to tensorflow readable format.
+    Uses name "writer" for summary writer
+
+    Args:
+        x: `iterable`. Function argument, horizontal axis
+        y: `iterable`. Function values, vertical axis
+        title: `str`. Title of plot
+        name: `str`. name scope for tensor ops for convertion
+
+    Returns:
+        nuffin
+
+    Raises:
+        TypeError if x or y are not iterable or different length"""
+    try:
+        iter(x)
+        iter(y)
+    except TypeError:
+        raise TypeError('x and y must be iterable')
+    if not len(x) == len(y):
+        raise TypeError('x and y must be same length')
+    default_name = 'plot'
+    if not name:
+        scope_name = default_name
+    else:
+        scope_name = name
+    plt.figure()
+    plt.plot(x, y)
+    if not title:
+        plt.title = title
+    plt.grid()
+    imbuf = io.BytesIO()
+    plt.savefig(imbuf, format='png')
+    imbuf.seek(0)
+    with tf.name_scope(scope_name):
+        img = tf.image.decode_png(imbuf.getvalue(), channels=4)
+        img = tf.expand_dims(img, 0)
+        im_op = tf.summary.image(scope_name, img)
+    im_sum = sess.run(im_op)
+    writer.add_summary(im_sum)
+    writer.flush()
+
+data = np.array([])
 with open('data_m.csv') as datafile:
     reader = csv.reader(datafile)
     for row in reader:
@@ -269,18 +364,20 @@ mln_out = tf.add_n(mln_tvn.get_out())
 # with tf.name_scope('error_root'):
 #     error_root = tf.sqrt(tf.squared_difference(tt, mln_out) - 1) - 1
 #     tf.summary.scalar('error_root', error_root)
-# error_sq = tf.squared_difference(tt, mln_out)
-# error_exp = 1 - tf.exp(-tf.squared_difference(tt, mln_out))
-# error_abs = (tt - mln_out)/(1 + tf.abs(tt - mln_out))
-error_root = tf.sqrt(tf.squared_difference(tt, mln_out) + 1) - 1
-# tf.summary.scalar('error_sq', error_sq)
-# tf.summary.scalar('error_exp', error_exp)
-# tf.summary.scalar('error_abs', error_abs)
-tf.summary.scalar('error_root', error_root)
+with tf.name_scope('errors'):
+    error_sq = tf.squared_difference(tt, mln_out)
+    error_exp = 1 - tf.exp(-tf.squared_difference(tt, mln_out))
+    error_abs = (tt - mln_out)/(1 + tf.abs(tt - mln_out))
+    error_root = tf.sqrt(tf.squared_difference(tt, mln_out) + 1) - 1
+    tf.summary.scalar('error_sq', error_sq)
+    tf.summary.scalar('error_exp', error_exp)
+    tf.summary.scalar('error_abs', error_abs)
+    tf.summary.scalar('error_root', error_root)
 tf.summary.scalar('output', mln_out)
-tf.summary.scalar('weight0', mln_tvn.LL[0].VN[0].ww[0])
-tf.summary.scalar('weight1', mln_tvn.LL[0].VN[0].ww[1])
-tf.summary.scalar('weight2', mln_tvn.LL[0].VN[0].ww[2])
+with tf.name_scope('weights'):
+    tf.summary.scalar('weight00', mln_tvn.LL[0].VN[0].ww[0])
+    tf.summary.scalar('weight01', mln_tvn.LL[0].VN[0].ww[1])
+    tf.summary.scalar('weight02', mln_tvn.LL[0].VN[0].ww[2])
 mergsumm = tf.summary.merge_all()
 
 optim = tf.train.MomentumOptimizer(0.01, 0.9)
@@ -290,49 +387,3 @@ sess = tf.Session()
 sess.run(tf.global_variables_initializer())
 curtime = datetime.strftime(datetime.now(), '%H%M%S')
 writer = tf.summary.FileWriter('tbrd_ann/' + curtime, sess.graph)
-
-def get_feeder(pick, is_training=False):
-    """Returns dictionary mapped for placeholders, unique"""
-    if is_training:
-        return form_feeder(inputs + [tt], [gt_learn, gv_learn, n_learn], pick)
-    return form_feeder(inputs + [tt], [gt_test, gv_test, n_test], pick)
-
-def train_net(runs, iterator, training=False):
-    """Contains commands for training neural network, unique
-
-    Args:
-        runs: `int` how many iterations to perform
-        iterator: `int` external cumulative variable for iteration count
-        training: `bool` are we training the network or not?
-
-    Returns:
-        `int` of iteration count"""
-    if not iterator:
-        raise RuntimeError('please define iterator. or set it to non-zero')
-    for _ in range(runs):
-        if training:
-            pick = np.random.randint(len(n_learn))
-            feeder = get_feeder(pick, training)
-            sess.run(train_step, feed_dict=feeder)
-            summary = sess.run(mergsumm, feed_dict=feeder)
-        else:
-            pick = np.random.randint(len(n_test))
-            feeder = get_feeder(pick, training)
-            summary = sess.run(mergsumm, feed_dict=feeder)
-        iterator += 1
-        writer.add_summary(summary, iterator)
-    return iterator
-
-def get_curve():
-    """Builds a sequence of ANN output for n_full
-
-    Forms an numpy.array for each value in n_full
-
-    Returns:
-        `numpy array` of shape (2, X)"""
-    res = np.array([])
-    for item in range(len(n_full)):
-        feeder = form_feeder(
-            inputs + [tt], [gt_full, gv_full, n_full], item)
-        res = np.append(res, sess.run(mln_out, feed_dict=feeder))
-    return res
