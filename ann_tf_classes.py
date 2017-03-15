@@ -73,6 +73,7 @@ class NNeuron():
                     for item in np.arange(len(inputs))]
 
 
+
 class NLayer():
     """Layer of neurons (`NNeuron`s)
 
@@ -83,7 +84,7 @@ class NLayer():
 
         Forms a layer of neurons with given number of neurons, each one having
         given number of inputs plus one (for a constant input)
-Args:
+        Args:
             inputs: `list of Tensor` inputs connected to the layer
             num_neurons: `int`. Number of neurons inside layer
             name: `str`. Name scope of layer
@@ -268,24 +269,27 @@ mln_out = tf.add_n(mln_tvn.get_out())
 # with tf.name_scope('error_root'):
 #     error_root = tf.sqrt(tf.squared_difference(tt, mln_out) - 1) - 1
 #     tf.summary.scalar('error_root', error_root)
-error_sq = tf.squared_difference(tt, mln_out)
-error_exp = 1 - tf.exp(-tf.squared_difference(tt, mln_out))
-error_abs = (tt - mln_out)/(1 + tf.abs(tt - mln_out))
-error_root = tf.sqrt(tf.squared_difference(tt, mln_out) - 1) - 1
-tf.summary.scalar('error_sq', error_sq)
-tf.summary.scalar('error_exp', error_exp)
-tf.summary.scalar('error_abs', error_abs)
+# error_sq = tf.squared_difference(tt, mln_out)
+# error_exp = 1 - tf.exp(-tf.squared_difference(tt, mln_out))
+# error_abs = (tt - mln_out)/(1 + tf.abs(tt - mln_out))
+error_root = tf.sqrt(tf.squared_difference(tt, mln_out) + 1) - 1
+# tf.summary.scalar('error_sq', error_sq)
+# tf.summary.scalar('error_exp', error_exp)
+# tf.summary.scalar('error_abs', error_abs)
 tf.summary.scalar('error_root', error_root)
 tf.summary.scalar('output', mln_out)
+tf.summary.scalar('weight0', mln_tvn.LL[0].VN[0].ww[0])
+tf.summary.scalar('weight1', mln_tvn.LL[0].VN[0].ww[1])
+tf.summary.scalar('weight2', mln_tvn.LL[0].VN[0].ww[2])
 mergsumm = tf.summary.merge_all()
 
-optim = tf.train.MomentumOptimizer(0.1, 0.9)
+optim = tf.train.MomentumOptimizer(0.01, 0.9)
 # optim = tf.train.GradientDescentOptimizer(0.1)
 train_step = optim.minimize(error_root)
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
 curtime = datetime.strftime(datetime.now(), '%H%M%S')
-writer = tf.summary.FileWriter('graph/' + curtime, sess.graph)
+writer = tf.summary.FileWriter('tbrd_ann/' + curtime, sess.graph)
 
 def get_feeder(pick, is_training=False):
     """Returns dictionary mapped for placeholders, unique"""
