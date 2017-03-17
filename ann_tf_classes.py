@@ -194,25 +194,6 @@ class NMLNetwork():
         for layer in self.LL:
             layer.tune_weight(val, randval)
 
-def form_feeder(feed_who, feed_what, pick):
-    """Forms dict_feed by selecting row from arrays
-
-    `feed_who` and `feed_what` should be same length to form pairs
-    (sink: source) from dict(zip(...)).
-
-    Args:
-        feed_who: `list of Tensor placeholder` to feed data
-        feed_what: `iterable`. Data which we feed to `Tensor`
-        pick: `int` row which we select from data
-
-    Returns:
-        feeder: `dict` appropriate to use as dict_feed to feed placeholders"""
-
-    feeder = {}
-    for sink, source in zip(feed_who, feed_what):
-        feeder[sink] = source[pick]
-
-
 def get_plot(x, y, title=None, name=None):
     """Generates pyplot plot and puts it to the summary
 
@@ -258,15 +239,50 @@ def get_plot(x, y, title=None, name=None):
     im_sum = sess.run(im_op)
     writer.add_summary(im_sum)
     writer.flush()
-    return feeder
 
-def get_feeder(pick, is_training=False):
-    """Returns dictionary mapped for placeholders, unique"""
-    if is_training:
-        return form_feeder(inputs + [tt], [gt_learn, gv_learn, n_learn], pick)
-    return form_feeder(inputs + [tt], [gt_test, gv_test, n_test], pick)
+def form_feeder(feed_who, feed_what, pick):
+    """Forms dict_feed by selecting row from arrays
 
-def train_net(runs, iterator, training=False):
+    `feed_who` and `feed_what` should be same length to form pairs
+    (sink: source) from dict(zip(...)).
+
+    Args:
+        feed_who: `list of Tensor placeholder` to feed data
+        feed_what: `iterable`. Data which we feed to `Tensor`
+        pick: `int` row which we select from data
+
+    Returns:
+        feeder: `dict` appropriate to use as dict_feed to feed placeholders"""
+
+    feeder = {}
+    for sink, source in zip(feed_who, feed_what):
+        feeder[sink] = source[pick]
+
+def get_feeder(pick, data):
+    """Returns dictionary mapped for placeholders, unique
+
+    basically removes need to concatenate inputs and tt
+
+    Uses:
+        inputs: `list` of input tensors
+        tt: `list` of target tensors
+
+    Args:
+        pick: `int` of row from data
+        data: `iterable` of data that should be length of inputs + tt
+
+    Raises:
+        RuntimeError if 'inputs' or 'tt' not defined
+        TypeError if inputs or tt are not lists"""
+    nonlocal inputs, tt
+    # TODO: other nonlocal variables that are in "Uses" sections
+    if not inputs or tt:
+        raise RuntimeError('inputs and tt must be defined')
+    if not isinstance(inputs, list) or not isinstance(tt, list) :
+        raise TypeError('inputs and tt must be lists')
+    return form_feeder(inputs + tt, data, pick)
+
+def train_net(runs, iterator, data):
     """Contains commands for training neural network, unique
 
     Uses name "writer" for summary writer
@@ -274,38 +290,49 @@ def train_net(runs, iterator, training=False):
     Args:
         runs: `int` how many iterations to perform
         iterator: `int` external cumulative variable for iteration count
-        training: `bool` are we training the network or not?
+        data: data set for network calculation
 
     Returns:
         `int` of iteration count"""
     if not iterator:
-        raise RuntimeError('please define iterator. or set it to non-zero')
+        iterator = 0
     for _ in range(runs):
+        pick = np.random.randint(len(data))
+        feeder = get_feeder(pick, data)
         if training:
-            pick = np.random.randint(len(n_learn))
-            feeder = get_feeder(pick, training)
             sess.run(train_step, feed_dict=feeder)
-            summary = sess.run(mergsumm, feed_dict=feeder)
-        else:
-            pick = np.random.randint(len(n_test))
-            feeder = get_feeder(pick, training)
-            summary = sess.run(mergsumm, feed_dict=feeder)
+        summary = sess.run(mergsumm, feed_dict=feeder)
         iterator += 1
         writer.add_summary(summary, iterator)
     writer.flush()
     return iterator
 
-def get_curve():
-    """Builds a sequence of ANN output for n_full, unique
+def get_curve(data):
+    """Builds a sequence of ANN output for data
 
-    Forms an numpy.array for each value in n_full
+    Forms an numpy.array for each value ordered sequantially as they
+    appear in 'data'
+
+    Uses:
+        inputs: `list` of input tensors
+        tt: `list` of target tensors
+
+    Args:
+        data: `list`. Data to map sequence of output. Must be list of
+        length of shape [inputs, tt]
 
     Returns:
-        `numpy array` of shape (2, X)"""
+        `numpy array` of network outputs
+
+    Raises:
+        TypeError if data is not same shape as inputs + tt or is not list"""
+    if not isinstance(data, list):
+        raise TypeError('data must be list of shape (inputs + tt)')
+    if len(data) != len(inputs + tt):
+        raise TypeError('data must be list of shape (inputs + tt)')
     res = np.array([])
-    for item in range(len(n_full)):
-        feeder = form_feeder(
-            inputs + [tt], [gt_full, gv_full, n_full], item)
+    for item in range(len(data)):
+        feeder = get_feeder(data, item)
         res = np.append(res, sess.run(mln_out, feed_dict=feeder))
     return res
 
@@ -362,7 +389,7 @@ for ind in indx[int(np.floor(indx.size*0.9)):]:
     gv_val = np.append(gv_val, data[2][ind])
 
 inputs = [tf.placeholder(tf.float32, name=item) for item in ['gt', 'gv']]
-tt = tf.placeholder(tf.float32, name='target')
+tt = [tf.placeholder(tf.float32, name='target')]
 mln_layout = [1 for _ in range(2)]
 mln_tvn = NMLNetwork(inputs, mln_layout, name='tvn')
 mln_out = tf.add_n(mln_tvn.get_out())
