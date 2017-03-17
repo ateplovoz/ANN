@@ -211,56 +211,7 @@ def form_feeder(feed_who, feed_what, pick):
     feeder = {}
     for sink, source in zip(feed_who, feed_what):
         feeder[sink] = source[pick]
-    return feeder
 
-def get_feeder(pick, is_training=False):
-    """Returns dictionary mapped for placeholders, unique"""
-    if is_training:
-        return form_feeder(inputs + [tt], [gt_learn, gv_learn, n_learn], pick)
-    return form_feeder(inputs + [tt], [gt_test, gv_test, n_test], pick)
-
-def train_net(runs, iterator, training=False):
-    """Contains commands for training neural network, unique
-
-    Uses name "writer" for summary writer
-
-    Args:
-        runs: `int` how many iterations to perform
-        iterator: `int` external cumulative variable for iteration count
-        training: `bool` are we training the network or not?
-
-    Returns:
-        `int` of iteration count"""
-    if not iterator:
-        raise RuntimeError('please define iterator. or set it to non-zero')
-    for _ in range(runs):
-        if training:
-            pick = np.random.randint(len(n_learn))
-            feeder = get_feeder(pick, training)
-            sess.run(train_step, feed_dict=feeder)
-            summary = sess.run(mergsumm, feed_dict=feeder)
-        else:
-            pick = np.random.randint(len(n_test))
-            feeder = get_feeder(pick, training)
-            summary = sess.run(mergsumm, feed_dict=feeder)
-        iterator += 1
-        writer.add_summary(summary, iterator)
-    writer.flush()
-    return iterator
-
-def get_curve():
-    """Builds a sequence of ANN output for n_full
-
-    Forms an numpy.array for each value in n_full
-
-    Returns:
-        `numpy array` of shape (2, X)"""
-    res = np.array([])
-    for item in range(len(n_full)):
-        feeder = form_feeder(
-            inputs + [tt], [gt_full, gv_full, n_full], item)
-        res = np.append(res, sess.run(mln_out, feed_dict=feeder))
-    return res
 
 def get_plot(x, y, title=None, name=None):
     """Generates pyplot plot and puts it to the summary
@@ -307,14 +258,77 @@ def get_plot(x, y, title=None, name=None):
     im_sum = sess.run(im_op)
     writer.add_summary(im_sum)
     writer.flush()
+    return feeder
+
+def get_feeder(pick, is_training=False):
+    """Returns dictionary mapped for placeholders, unique"""
+    if is_training:
+        return form_feeder(inputs + [tt], [gt_learn, gv_learn, n_learn], pick)
+    return form_feeder(inputs + [tt], [gt_test, gv_test, n_test], pick)
+
+def train_net(runs, iterator, training=False):
+    """Contains commands for training neural network, unique
+
+    Uses name "writer" for summary writer
+
+    Args:
+        runs: `int` how many iterations to perform
+        iterator: `int` external cumulative variable for iteration count
+        training: `bool` are we training the network or not?
+
+    Returns:
+        `int` of iteration count"""
+    if not iterator:
+        raise RuntimeError('please define iterator. or set it to non-zero')
+    for _ in range(runs):
+        if training:
+            pick = np.random.randint(len(n_learn))
+            feeder = get_feeder(pick, training)
+            sess.run(train_step, feed_dict=feeder)
+            summary = sess.run(mergsumm, feed_dict=feeder)
+        else:
+            pick = np.random.randint(len(n_test))
+            feeder = get_feeder(pick, training)
+            summary = sess.run(mergsumm, feed_dict=feeder)
+        iterator += 1
+        writer.add_summary(summary, iterator)
+    writer.flush()
+    return iterator
+
+def get_curve():
+    """Builds a sequence of ANN output for n_full, unique
+
+    Forms an numpy.array for each value in n_full
+
+    Returns:
+        `numpy array` of shape (2, X)"""
+    res = np.array([])
+    for item in range(len(n_full)):
+        feeder = form_feeder(
+            inputs + [tt], [gt_full, gv_full, n_full], item)
+        res = np.append(res, sess.run(mln_out, feed_dict=feeder))
+    return res
+
 
 data = np.array([])
+data_full = np.array([])
+data_full_names = np.array([])
 with open('data_m.csv') as datafile:
     reader = csv.reader(datafile)
     for row in reader:
         data = np.append(data, row)
 data = data.reshape(3, 32).astype(float)  # Три 1-тензора длиной 32
 data[0] = data[0]*0.001  # Перевод Вт в кВт
+with open('data_ANN_full.csv') as datafile:
+    reader = csv.reader(datafile)
+    for row in reader:
+        data_full = np.append(data_full, row)
+data_full = data_full.reshape(23, 20045)
+with open('data_ANN_full_names.csv') as datafile:
+    reader = csv.reader(datafile)
+    for row in reader:
+        data_full_names = np.append(data_full_names, row)
+
 
 # Формируется архив индексов, который потом перемешивается.
 # Обучающей, тестовой и валидационной выборке присваиваются одинаковые
