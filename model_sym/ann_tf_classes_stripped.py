@@ -1,13 +1,10 @@
 # -* coding=utf-8 -*-
 """Contains tensorflow ANN classes and functions for data learning"""
 
-import csv
 import io
-from datetime import datetime
 import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
-
 
 class NNeuron():
     """Neuron class.
@@ -19,9 +16,7 @@ class NNeuron():
         """Neuron class --- basic neuron
 
         Creates a neuron with relu activation function
-
-        Args:
-            inputs: `list of Tensor`. Tensors that we connect to the neuron
+Args: inputs: `list of Tensor`. Tensors that we connect to the neuron
             type: `str='relu` or any other `str`. type of activation function
             name: `str`. Name of tensor node.
 
@@ -139,7 +134,7 @@ class NMLNetwork():
     Multi-layer network contains several layers, containing multiple neurons
     each. Only first layer is connected to inputs. Outputs of last layer can
     be summarized to network output."""
-    def __init__(self, inputs, layout_list, name=None):
+    def __init__(self, inputs, tt, layout_list, name=None):
         """Neural multi-layer network --- creates multi-layered network
 
         Creates network structure according to `layout_list`
@@ -167,7 +162,7 @@ class NMLNetwork():
         else:
             self.name = name
         with tf.name_scope(self.name):
-            self.LL = [0]*len(layout_list)
+            self.LL = [0]*(len(layout_list) + 1)
             lcount = 1
             self.LL[0] = NLayer(inputs, layout_list[0], name='layer0')
             # probably weird behaviour if `layout_list`
@@ -177,10 +172,22 @@ class NMLNetwork():
                     self.LL[lcount - 1].get_out(),
                     num_neurons, name='layer{}'.format(lcount))
                 lcount += 1
+            self.LL[-1] = NLayer(self.LL[-2].get_out(), len(tt), name='outerlayer')
+            with tf.name_scope('output'):
+                self.output = self.LL[-1].get_out()
+            with tf.name_scope('error'):
+                self.error = [tf.sqrt(
+                    tf.squared_difference(tt, out) + 1) - 1 for tt, out in zip(tt, self.output)]
+                self.errsum = tf.add_n(self.error, name='error_sum')
+            tf.summary.scalar(self.name + '-errors', self.error)
+            tf.summary.scalar(self.name + '-errsum', self.errsum)
+            tf.summary.scalar(self.name + '-output', self.output)
+            self.mergesum = tf.summary.merge_all()
 
     def get_out(self):
         """returns output of the last layer"""
-        return self.LL[-1].get_out()
+        # return self.LL[-1].get_out()
+        return self.output
 
     def tune_weight(self, val, randval):
         """Sets new weight value for each neuron within network.
@@ -193,7 +200,94 @@ class NMLNetwork():
         for layer in self.LL:
             layer.tune_weight(val, randval)
 
-def get_plot(x, y, title=None, name=None):
+
+def form_feeder(feed_who, feed_what, pick):
+    """Forms dict_feed by selecting row from arrays
+
+    `feed_who` and `feed_what` should be same length to form pairs
+    (sink: source) from dict(zip(...)).
+
+    Args:
+        feed_who: `list of Tensor placeholder` to feed data
+        feed_what: `iterable`. Data which we feed to `Tensor`
+        pick: `int` row which we select from data
+
+    Returns:
+        feeder: `dict` appropriate to use as dict_feed to feed placeholders"""
+
+    feeder = {}
+    for sink, source in zip(feed_who, feed_what):
+        feeder[sink] = source[pick]
+
+def get_feeder(pick, data, inputs, tt):
+    """Returns dictionary mapped for placeholders, unique
+
+    basically removes need to concatenate inputs and tt
+    also checks whether inputs and tt are lists
+
+    Args:
+        pick: `int` of row from data
+        data: `iterable` of data that should be length of inputs + tt
+        inputs: `list of Tensors` of inputs
+        tt: `list of Tensors` of target values
+
+    Raises:
+        TypeError if inputs or tt are not lists"""
+    if not isinstance(inputs, list) or not isinstance(tt, list):
+        raise TypeError('inputs and tt must be lists')
+    return form_feeder(inputs + tt, data, pick)
+
+def train_net(runs, iterator, data, writer, inputs, tt):
+    """Contains instructions for training neural network, unique
+
+    Uses name "writer" for summary writer
+
+    Args:
+        runs: `int` how many iterations to perform
+        iterator: `int` external cumulative variable for iteration count
+        data: learning set
+
+    Returns:
+        `int` of iteration count"""
+    if not iterator:
+        iterator = 0
+    for _ in range(runs):
+        pick = np.random.randint(len(data))
+        feeder = get_feeder(pick, data)
+        sess.run(train_step, feed_dict=feeder)
+        summary = sess.run(mergsumm, feed_dict=feeder)
+        iterator += 1
+        writer.add_summary(summary, iterator)
+    writer.flush()
+    return iterator
+
+def get_curve(data, inputs, tt):
+    """Builds a sequence of ANN output for data
+    Forms an numpy.array for each value ordered sequantially as they
+    appear in 'data'
+
+    Args:
+        data: `list`. Data to map sequence of output. Must be list of
+            length of shape [inputs, tt]
+        inputs: `list of Tensors` of inputs
+        tt: `list of Tensors` of target values
+
+    Returns:
+        `numpy array` of network outputs
+
+    Raises:
+        TypeError if data is not same shape as inputs + tt or is not list"""
+    if not isinstance(data, list):
+        raise TypeError('data must be list of shape (inputs + tt)')
+    if len(data) != len(inputs + tt):
+        raise TypeError('data must be list of shape (inputs + tt)')
+    res = np.array([])
+    for item in range(len(data)):
+        feeder = get_feeder(data, item)
+        res = np.append(res, sess.run(mln_out, feed_dict=feeder))
+    return res
+
+def get_plot(x, y, writer, title=None, name=None):
     """Generates pyplot plot and puts it to the summary
 
     Uses matplotlib.pyplot to generate plot y(x), saves it to temporary buffer
@@ -238,194 +332,3 @@ def get_plot(x, y, title=None, name=None):
     im_sum = sess.run(im_op)
     writer.add_summary(im_sum)
     writer.flush()
-
-def form_feeder(feed_who, feed_what, pick):
-    """Forms dict_feed by selecting row from arrays
-
-    `feed_who` and `feed_what` should be same length to form pairs
-    (sink: source) from dict(zip(...)).
-
-    Args:
-        feed_who: `list of Tensor placeholder` to feed data
-        feed_what: `iterable`. Data which we feed to `Tensor`
-        pick: `int` row which we select from data
-
-    Returns:
-        feeder: `dict` appropriate to use as dict_feed to feed placeholders"""
-
-    feeder = {}
-    for sink, source in zip(feed_who, feed_what):
-        feeder[sink] = source[pick]
-
-def get_feeder(pick, data):
-    """Returns dictionary mapped for placeholders, unique
-
-    basically removes need to concatenate inputs and tt
-
-    Uses:
-        inputs: `list` of input tensors
-        tt: `list` of target tensors
-
-    Args:
-        pick: `int` of row from data
-        data: `iterable` of data that should be length of inputs + tt
-
-    Raises:
-        RuntimeError if 'inputs' or 'tt' not defined
-        TypeError if inputs or tt are not lists"""
-    nonlocal inputs, tt
-    if not inputs or tt:
-        raise RuntimeError('inputs and tt must be defined')
-    if not isinstance(inputs, list) or not isinstance(tt, list) :
-        raise TypeError('inputs and tt must be lists')
-    return form_feeder(inputs + tt, data, pick)
-
-def train_net(runs, iterator, data):
-    """Contains commands for training neural network, unique
-
-    Uses name "writer" for summary writer
-
-    Args:
-        runs: `int` how many iterations to perform
-        iterator: `int` external cumulative variable for iteration count
-        data: data set for network calculation
-
-    Returns:
-        `int` of iteration count"""
-    if not iterator:
-        iterator = 0
-    for _ in range(runs):
-        pick = np.random.randint(len(data))
-        feeder = get_feeder(pick, data)
-        if training:
-            sess.run(train_step, feed_dict=feeder)
-        summary = sess.run(mergsumm, feed_dict=feeder)
-        iterator += 1
-        writer.add_summary(summary, iterator)
-    writer.flush()
-    return iterator
-
-def get_curve(data):
-    """Builds a sequence of ANN output for data
-
-    Forms an numpy.array for each value ordered sequantially as they
-    appear in 'data'
-
-    Uses:
-        inputs: `list` of input tensors
-        tt: `list` of target tensors
-
-    Args:
-        data: `list`. Data to map sequence of output. Must be list of
-        length of shape [inputs, tt]
-
-    Returns:
-        `numpy array` of network outputs
-
-    Raises:
-        TypeError if data is not same shape as inputs + tt or is not list"""
-    nonlocal inputs, tt
-    if not isinstance(data, list):
-        raise TypeError('data must be list of shape (inputs + tt)')
-    if len(data) != len(inputs + tt):
-        raise TypeError('data must be list of shape (inputs + tt)')
-    res = np.array([])
-    for item in range(len(data)):
-        feeder = get_feeder(data, item)
-        res = np.append(res, sess.run(mln_out, feed_dict=feeder))
-    return res
-
-
-data = np.array([])
-data_full = np.array([])
-data_full_names = np.array([])
-with open('data_m.csv') as datafile:
-    reader = csv.reader(datafile)
-    for row in reader:
-        data = np.append(data, row)
-data = data.reshape(3, 32).astype(float)  # Три 1-тензора длиной 32
-data[0] = data[0]*0.001  # Перевод Вт в кВт
-with open('data_ANN_full.csv') as datafile:
-    reader = csv.reader(datafile)
-    for row in reader:
-        data_full = np.append(data_full, row)
-data_full = data_full.reshape(23, 20045)
-with open('data_ANN_full_names.csv') as datafile:
-    reader = csv.reader(datafile)
-    for row in reader:
-        data_full_names = np.append(data_full_names, row)
-data_dict = dict(zip(data_full_names, data_full))
-
-# Формируется архив индексов, который потом перемешивается.
-# Обучающей, тестовой и валидационной выборке присваиваются одинаковые
-# значения. Прирчём соотношения выборок 70:20:10
-indx = np.arange(data[0].size)
-indx_full = np.arange(data_full[0].size)
-np.random.shuffle(indx)
-np.random.shuffle(indx_full)
-n_full = data[0]
-gt_full = data[1]
-gv_full = data[2]
-n_learn = np.array([])
-gt_learn = np.array([])
-gv_learn = np.array([])
-n_test = np.array([])
-gt_test = np.array([])
-gv_test = np.array([])
-n_val = np.array([])
-gt_val = np.array([])
-gv_val = np.array([])
-
-for ind in indx[:int(np.floor(indx.size*0.7))]:
-    n_learn = np.append(n_learn, data[0][ind])
-    gt_learn = np.append(gt_learn, data[1][ind])
-    gv_learn = np.append(gv_learn, data[2][ind])
-for ind in indx[int(np.floor(indx.size*0.7)):int(np.floor(indx.size*0.9))]:
-    n_test = np.append(n_test, data[0][ind])
-    gt_test = np.append(gt_test, data[1][ind])
-    gv_test = np.append(gv_test, data[2][ind])
-for ind in indx[int(np.floor(indx.size*0.9)):]:
-    n_val = np.append(n_val, data[0][ind])
-    gt_val = np.append(gt_val, data[1][ind])
-    gv_val = np.append(gv_val, data[2][ind])
-
-inputs = [tf.placeholder(tf.float32, name=item) for item in ['gt', 'gv']]
-tt = [tf.placeholder(tf.float32, name='target')]
-mln_layout = [1 for _ in range(2)]
-mln_tvn = NMLNetwork(inputs, mln_layout, name='tvn')
-mln_out = tf.add_n(mln_tvn.get_out())
-# with tf.name_scope('error_sq'):
-#     error_sq = tf.squared_difference(tt, mln_out)
-#     tf.summary.scalar('error_sq', error_sq)
-# with tf.name_scope('error_exp'):
-#     error_exp = 1 - tf.exp(-tf.squared_difference(tt, mln_out))
-#     tf.summary.scalar('error_exp', error_exp)
-# with tf.name_scope('error_abs'):
-#     error_abs = (tt - mln_out)/(1 + tf.abs(tt - mln_out))
-#     tf.summary.scalar('error_abs', error_abs)
-# with tf.name_scope('error_root'):
-#     error_root = tf.sqrt(tf.squared_difference(tt, mln_out) - 1) - 1
-#     tf.summary.scalar('error_root', error_root)
-with tf.name_scope('errors'):
-    error_sq = tf.squared_difference(tt, mln_out)
-    error_exp = 1 - tf.exp(-tf.squared_difference(tt, mln_out))
-    error_abs = (tt - mln_out)/(1 + tf.abs(tt - mln_out))
-    error_root = tf.sqrt(tf.squared_difference(tt, mln_out) + 1) - 1
-    tf.summary.scalar('error_sq', error_sq)
-    tf.summary.scalar('error_exp', error_exp)
-    tf.summary.scalar('error_abs', error_abs)
-    tf.summary.scalar('error_root', error_root)
-tf.summary.scalar('output', mln_out)
-with tf.name_scope('weights'):
-    tf.summary.scalar('weight00', mln_tvn.LL[0].VN[0].ww[0])
-    tf.summary.scalar('weight01', mln_tvn.LL[0].VN[0].ww[1])
-    tf.summary.scalar('weight02', mln_tvn.LL[0].VN[0].ww[2])
-mergsumm = tf.summary.merge_all()
-
-optim = tf.train.MomentumOptimizer(0.01, 0.9)
-# optim = tf.train.GradientDescentOptimizer(0.1)
-train_step = optim.minimize(error_root)
-sess = tf.Session()
-sess.run(tf.global_variables_initializer())
-curtime = datetime.strftime(datetime.now(), '%H%M%S')
-writer = tf.summary.FileWriter('tbrd_ann/' + curtime, sess.graph)

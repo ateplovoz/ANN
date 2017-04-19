@@ -19,9 +19,7 @@ class NNeuron():
         """Neuron class --- basic neuron
 
         Creates a neuron with relu activation function
-
-        Args:
-            inputs: `list of Tensor`. Tensors that we connect to the neuron
+Args: inputs: `list of Tensor`. Tensors that we connect to the neuron
             type: `str='relu` or any other `str`. type of activation function
             name: `str`. Name of tensor node.
 
@@ -334,98 +332,3 @@ def get_curve(data):
         feeder = get_feeder(data, item)
         res = np.append(res, sess.run(mln_out, feed_dict=feeder))
     return res
-
-
-data = np.array([])
-data_full = np.array([])
-data_full_names = np.array([])
-with open('data_m.csv') as datafile:
-    reader = csv.reader(datafile)
-    for row in reader:
-        data = np.append(data, row)
-data = data.reshape(3, 32).astype(float)  # Три 1-тензора длиной 32
-data[0] = data[0]*0.001  # Перевод Вт в кВт
-with open('data_ANN_full.csv') as datafile:
-    reader = csv.reader(datafile)
-    for row in reader:
-        data_full = np.append(data_full, row)
-data_full = data_full.reshape(23, 20045)
-with open('data_ANN_full_names.csv') as datafile:
-    reader = csv.reader(datafile)
-    for row in reader:
-        data_full_names = np.append(data_full_names, row)
-data_dict = dict(zip(data_full_names, data_full))
-
-# Формируется архив индексов, который потом перемешивается.
-# Обучающей, тестовой и валидационной выборке присваиваются одинаковые
-# значения. Прирчём соотношения выборок 70:20:10
-indx = np.arange(data[0].size)
-indx_full = np.arange(data_full[0].size)
-np.random.shuffle(indx)
-np.random.shuffle(indx_full)
-n_full = data[0]
-gt_full = data[1]
-gv_full = data[2]
-n_learn = np.array([])
-gt_learn = np.array([])
-gv_learn = np.array([])
-n_test = np.array([])
-gt_test = np.array([])
-gv_test = np.array([])
-n_val = np.array([])
-gt_val = np.array([])
-gv_val = np.array([])
-
-for ind in indx[:int(np.floor(indx.size*0.7))]:
-    n_learn = np.append(n_learn, data[0][ind])
-    gt_learn = np.append(gt_learn, data[1][ind])
-    gv_learn = np.append(gv_learn, data[2][ind])
-for ind in indx[int(np.floor(indx.size*0.7)):int(np.floor(indx.size*0.9))]:
-    n_test = np.append(n_test, data[0][ind])
-    gt_test = np.append(gt_test, data[1][ind])
-    gv_test = np.append(gv_test, data[2][ind])
-for ind in indx[int(np.floor(indx.size*0.9)):]:
-    n_val = np.append(n_val, data[0][ind])
-    gt_val = np.append(gt_val, data[1][ind])
-    gv_val = np.append(gv_val, data[2][ind])
-
-inputs = [tf.placeholder(tf.float32, name=item) for item in ['gt', 'gv']]
-tt = [tf.placeholder(tf.float32, name='target')]
-mln_layout = [1 for _ in range(2)]
-mln_tvn = NMLNetwork(inputs, mln_layout, name='tvn')
-mln_out = tf.add_n(mln_tvn.get_out())
-# with tf.name_scope('error_sq'):
-#     error_sq = tf.squared_difference(tt, mln_out)
-#     tf.summary.scalar('error_sq', error_sq)
-# with tf.name_scope('error_exp'):
-#     error_exp = 1 - tf.exp(-tf.squared_difference(tt, mln_out))
-#     tf.summary.scalar('error_exp', error_exp)
-# with tf.name_scope('error_abs'):
-#     error_abs = (tt - mln_out)/(1 + tf.abs(tt - mln_out))
-#     tf.summary.scalar('error_abs', error_abs)
-# with tf.name_scope('error_root'):
-#     error_root = tf.sqrt(tf.squared_difference(tt, mln_out) - 1) - 1
-#     tf.summary.scalar('error_root', error_root)
-with tf.name_scope('errors'):
-    error_sq = tf.squared_difference(tt, mln_out)
-    error_exp = 1 - tf.exp(-tf.squared_difference(tt, mln_out))
-    error_abs = (tt - mln_out)/(1 + tf.abs(tt - mln_out))
-    error_root = tf.sqrt(tf.squared_difference(tt, mln_out) + 1) - 1
-    tf.summary.scalar('error_sq', error_sq)
-    tf.summary.scalar('error_exp', error_exp)
-    tf.summary.scalar('error_abs', error_abs)
-    tf.summary.scalar('error_root', error_root)
-tf.summary.scalar('output', mln_out)
-with tf.name_scope('weights'):
-    tf.summary.scalar('weight00', mln_tvn.LL[0].VN[0].ww[0])
-    tf.summary.scalar('weight01', mln_tvn.LL[0].VN[0].ww[1])
-    tf.summary.scalar('weight02', mln_tvn.LL[0].VN[0].ww[2])
-mergsumm = tf.summary.merge_all()
-
-optim = tf.train.MomentumOptimizer(0.01, 0.9)
-# optim = tf.train.GradientDescentOptimizer(0.1)
-train_step = optim.minimize(error_root)
-sess = tf.Session()
-sess.run(tf.global_variables_initializer())
-curtime = datetime.strftime(datetime.now(), '%H%M%S')
-writer = tf.summary.FileWriter('tbrd_ann/' + curtime, sess.graph)
