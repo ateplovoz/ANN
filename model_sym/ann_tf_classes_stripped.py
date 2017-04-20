@@ -2,6 +2,7 @@
 """Contains tensorflow ANN classes and functions for data learning"""
 
 import io
+from datetime import datetime
 import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
@@ -16,7 +17,8 @@ class NNeuron():
         """Neuron class --- basic neuron
 
         Creates a neuron with relu activation function
-Args: inputs: `list of Tensor`. Tensors that we connect to the neuron
+        Args:
+            inputs: `list of Tensor`. Tensors that we connect to the neuron
             type: `str='relu` or any other `str`. type of activation function
             name: `str`. Name of tensor node.
 
@@ -67,7 +69,6 @@ Args: inputs: `list of Tensor`. Tensors that we connect to the neuron
                         val + np.random.rand()*randval,
                         name='ww_{}'.format(item))
                     for item in np.arange(len(inputs))]
-
 
 
 class NLayer():
@@ -183,6 +184,12 @@ class NMLNetwork():
             tf.summary.scalar(self.name + '-errsum', self.errsum)
             tf.summary.scalar(self.name + '-output', self.output)
             self.mergesum = tf.summary.merge_all()
+        self.TDELTA = 0.01
+        self.epoch = 0
+        self.feeder = {}
+        self.sess = None
+        self.optim = None
+        self.train_step = None
 
     def get_out(self):
         """returns output of the last layer"""
@@ -200,6 +207,107 @@ class NMLNetwork():
         for layer in self.LL:
             layer.tune_weight(val, randval)
 
+    def init_sess(self):
+        """initializes and/or resets network variables, optimizer and session.
+
+        Args:
+            none
+
+        Returns:
+            nuffin"""
+        self.optim = tf.train.MomentumOptimizer(self.TDELTA, 0.9)
+        self.train_step = optim.minimize(self.errsum)
+        self.sess = tf.Session()
+        self.sess.run(tf.global_variables_initializer())
+        self.writer = tf.summary.FileWriter(
+                'tbrd_model_sym/' + datetime.strftime(datetime.now(), '%H%M%S'),
+                sess.graph)
+
+    def train(self, iters, dsocket):
+        """Contains instructions for training neural network
+Args: iters: `int` of how many iterations to perform
+            dsocket: a `Datasocket` object that forms feeder and contains data
+        """
+        for _ in range(iters):
+            pick = np.random.randint(len(data))
+            feeder = get_feeder(pick, data)
+            sess.run(train_step, feed_dict=self.feeder)
+            summary = sess.run(self.mergsum, feed_dict=feeder)
+            iterator += 1
+            writer.add_summary(summary, iterator)
+        writer.flush()
+
+
+class Datasocket():
+    """class for managing outer connections of networks
+
+    Provides ways for creating feeders, managing external data and such"""
+    def __init__(self, *args, name=None):
+        """creates Datasocket object
+
+        Datasocket is a placeholder tensor with functions, that makes data
+        management a little bit easier
+
+        Args:
+            *args: `tuple`s of (name, data_list) that are considered as data
+            inputs
+
+        Returns:
+            an object of Datasocket class
+
+        Raises:
+            TypeError if something in arg is not a tuple"""
+        self.sockets = {}
+        self.default_name = 'datasocket'
+        if not name:
+            self.name = self.default_name
+        else:
+            self.name = name
+        with tf.name_scope('datasocket'):
+            for item in args:
+                if not isinstance(item, tuple):
+                    raise TypeError('{} is not a tuple of (name, data)'.format(item))
+                socket_name, socket_data = item
+                self.sockets[socket_name] = (
+                        (tf.placeholder(tf.float32, name=socket_name), socket_data))
+
+    def get_feeder(self, pick=None):
+        """forms dict_feed from all datasockets
+        Args:
+            pick: `int` index of row. If not provided than random one is
+            chosen
+        Returns:
+            `dict` appropriate to use as dict_feed to feed placeholders
+        """
+        feeder = {}
+        dlen = np.inf  # actual infinity
+        if not pick:
+            for item in self.sockets:
+                _, data = self.sockets[item]
+                dlen = min(dlen, len(data))
+            pick = np.random.randint(dlen)
+        for item in self.sockets:
+            dsock, data = self.sockets[item]
+            feeder[dsock] = data[pick]
+        return feeder
+
+    def get_sock(self, *args):
+        """returns requested tensors
+
+        Args:
+            *args: `list of str` of names of tensors that are required.
+            If not provided returns all dsockets
+
+        Returns
+            `list of Tensors` with requested dsockets"""
+        res = []
+        for item in args:
+            try:
+                res.append(self.sockets[item])
+            except KeyError:
+                pass
+        return res
+
 
 def form_feeder(feed_who, feed_what, pick):
     """Forms dict_feed by selecting row from arrays
@@ -213,31 +321,32 @@ def form_feeder(feed_who, feed_what, pick):
         pick: `int` row which we select from data
 
     Returns:
-        feeder: `dict` appropriate to use as dict_feed to feed placeholders"""
+        feeder: `dict` appropriate to use as dict_feed to feed placeholders
 
-    feeder = {}
+    Raises:
+        TypeError if feed_who and feed_what are not same length"""
+
+    if len(feed_what) != len(feed_who):
+        raise TypeError('inputs must be same length')
     for sink, source in zip(feed_who, feed_what):
         feeder[sink] = source[pick]
 
-def get_feeder(pick, data, inputs, tt):
-    """Returns dictionary mapped for placeholders, unique
+def get_feeder(pick, data):
+    """Returns dictionary mapped for placeholders
 
-    basically removes need to concatenate inputs and tt
-    also checks whether inputs and tt are lists
+    maps data for inputs and tt of network
 
     Args:
         pick: `int` of row from data
         data: `iterable` of data that should be length of inputs + tt
-        inputs: `list of Tensors` of inputs
-        tt: `list of Tensors` of target values
 
     Raises:
-        TypeError if inputs or tt are not lists"""
-    if not isinstance(inputs, list) or not isinstance(tt, list):
-        raise TypeError('inputs and tt must be lists')
+        TypeError if data does not precisely fit inputs and tt"""
+    if len(data) != len(self.inputs) + len(self.tt):
+        raise TypeError('data should be same length of inputs and tt')
     return form_feeder(inputs + tt, data, pick)
 
-def train_net(runs, iterator, data, writer, inputs, tt):
+def train_net(runs, iterator, data):
     """Contains instructions for training neural network, unique
 
     Uses name "writer" for summary writer
@@ -254,8 +363,8 @@ def train_net(runs, iterator, data, writer, inputs, tt):
     for _ in range(runs):
         pick = np.random.randint(len(data))
         feeder = get_feeder(pick, data)
-        sess.run(train_step, feed_dict=feeder)
-        summary = sess.run(mergsumm, feed_dict=feeder)
+        sess.run(train_step, feed_dict=self.feeder)
+        summary = sess.run(self.mergsum, feed_dict=feeder)
         iterator += 1
         writer.add_summary(summary, iterator)
     writer.flush()
