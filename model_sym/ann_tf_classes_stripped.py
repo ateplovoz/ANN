@@ -216,25 +216,25 @@ class NMLNetwork():
         Returns:
             nuffin"""
         self.optim = tf.train.MomentumOptimizer(self.TDELTA, 0.9)
-        self.train_step = optim.minimize(self.errsum)
+        self.train_step = self.optim.minimize(self.errsum)
         self.sess = tf.Session()
         self.sess.run(tf.global_variables_initializer())
         self.writer = tf.summary.FileWriter(
                 'tbrd_model_sym/' + datetime.strftime(datetime.now(), '%H%M%S'),
-                sess.graph)
+                self.sess.graph)
 
     def train(self, iters, dsocket):
         """Contains instructions for training neural network
-Args: iters: `int` of how many iterations to perform
+        Args:
+            iters: `int` of how many iterations to perform
             dsocket: a `Datasocket` object that forms feeder and contains data
         """
         for _ in range(iters):
-            pick = np.random.randint(len(data))
-            feeder = get_feeder(pick, data)
-            sess.run(train_step, feed_dict=self.feeder)
+            feeder = dsocket.get_feeder()
+            sess.run(self.train_step, feed_dict=feeder)
             summary = sess.run(self.mergsum, feed_dict=feeder)
-            iterator += 1
-            writer.add_summary(summary, iterator)
+            self.epoch += 1
+            writer.add_summary(summary, self.epoch)
         writer.flush()
 
 
@@ -303,11 +303,27 @@ class Datasocket():
         res = []
         for item in args:
             try:
-                res.append(self.sockets[item])
+                res.append(self.sockets[item][0])
             except KeyError:
                 pass
         return res
 
+    def get_data(self, *args):
+        """returns data for according tensors
+
+        Args:
+            *args: `list of str` of names of tensors which data that is
+            required. If not provided returns None
+
+        Returns
+            `list of Tensors` with requested dsockets OR None"""
+        res = []
+        for item in args:
+            try:
+                res.append(self.sockets[item][1])
+            except KeyError:
+                pass
+        return res
 
 def form_feeder(feed_who, feed_what, pick):
     """Forms dict_feed by selecting row from arrays
