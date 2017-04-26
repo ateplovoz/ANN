@@ -32,6 +32,7 @@ class NNeuron():
         except TypeError:
             raise TypeError('inputs must be iterable')
         self.default_name = 'neuron'
+        self.inputsize = len(inputs)
         if not name:
             self.name = self.default_name
         else:
@@ -44,7 +45,7 @@ class NNeuron():
                     tf.Variable(
                         np.random.rand(),
                         name='ww_{}'.format(item))
-                    for item in np.arange(len(inputs))]
+                    for item in np.arange(self.inputsize)]
             with tf.name_scope('iws'):
                 self.iw = [
                     tf.multiply(in_it, ww_it, name='iw')
@@ -53,7 +54,7 @@ class NNeuron():
             with tf.name_scope('oo'):
                 self.oo = tf.nn.relu(self.iws)
 
-    def tune_weight(self, val, randval):
+    def tune_weight(self, val, randval, sess):
         """Tunes weights of neuron
 
         This function sets each weight to given value and after that adds
@@ -61,14 +62,17 @@ class NNeuron():
 
         Args:
             value: `float` to which value set neurons
-            rand: `float` radius in which final value can be randomized"""
-        with tf.name_scope(self.name):
-            with tf.name_scope('ww'):
-                self.ww = [
-                    tf.Variable(
-                        val + np.random.rand()*randval,
-                        name='ww_{}'.format(item))
-                    for item in np.arange(len(inputs))]
+            rand: `float` radius in which final value can be randomized
+            sess: `session` current session"""
+#         with tf.name_scope(self.name):
+#             with tf.name_scope('ww'):
+#                 self.ww = [
+#                     tf.Variable(
+#                         val + np.random.rand()*randval,
+#                         name='ww_{}'.format(item))
+#                     for item in np.arange(self.inputsize)]
+        #  probably poorly optimized --- sess.run for each neuron
+        sess.run([weight.assign(val + np.random.rand()*randval) for weight in self.ww])
 
 
 class NLayer():
@@ -116,7 +120,7 @@ class NLayer():
         """returns output of layer"""
         return [neur.oo for neur in self.VN]
 
-    def tune_weight(self, val, randval):
+    def tune_weight(self, val, randval, sess):
         """Tunes weight for each neuron in layer
 
         Calls `tune_weight` method from NNeuron objects, passes given
@@ -124,9 +128,10 @@ class NLayer():
 
         Args:
             value: `float` to which value set neurons
-            rand: `float` radius in which final value can be randomized"""
+            rand: `float` radius in which final value can be randomized
+            sess: `sess` current session"""
         for neur in self.VN:
-            neur.tune_weight(val, randval)
+            neur.tune_weight(val, randval, sess)
 
 
 class NMLNetwork():
@@ -176,15 +181,22 @@ class NMLNetwork():
             self.LL[-1] = NLayer(self.LL[-2].get_out(), len(tt), name='outerlayer')
             with tf.name_scope('output'):
                 self.output = self.LL[-1].get_out()
+                for out in self.output:
+                    tf.summary.scalar('output', out)
             with tf.name_scope('error'):
                 self.error = [tf.sqrt(
                     tf.squared_difference(tt, out) + 1) - 1 for tt, out in zip(tt, self.output)]
                 self.errsum = tf.add_n(self.error, name='error_sum')
-            tf.summary.scalar(self.name + '-errors', self.error)
-            tf.summary.scalar(self.name + '-errsum', self.errsum)
-            tf.summary.scalar(self.name + '-output', self.output)
-            self.mergesum = tf.summary.merge_all()
-        self.TDELTA = 0.01
+                for err in self.error:
+                    tf.summary.scalar('error', err)
+                tf.summary.scalar(self.name + '-errsum', self.errsum)
+        with tf.name_scope('LL-out'):
+            [tf.summary.scalar('LL-out', item) for item in self.LL[0].get_out()]
+            # tf.summary.scalar(self.name + '-errors', self.error)
+            # tf.summary.scalar(self.name + '-output', self.output)
+        self.mergsum = tf.summary.merge_all()
+
+        self.TDELTA = 0.001
         self.epoch = 0
         self.feeder = {}
         self.sess = None
@@ -192,20 +204,21 @@ class NMLNetwork():
         self.train_step = None
 
     def get_out(self):
-        """returns output of the last layer"""
+        """returns output of the last layer (deprecated)"""
         # return self.LL[-1].get_out()
         return self.output
 
-    def tune_weight(self, val, randval):
+    def tune_weight(self, val, randval, sess):
         """Sets new weight value for each neuron within network.
 
         Calls tune_weight method from NLayer objects. Passes given arguments.
         Args:
             value: `float` to which value set neurons
-            rand: `float` radius in which final value can be randomized"""
+            rand: `float` radius in which final value can be randomized
+            sess: `session` current session"""
 
         for layer in self.LL:
-            layer.tune_weight(val, randval)
+            layer.tune_weight(val, randval, sess)
 
     def init_sess(self):
         """initializes and/or resets network variables, optimizer and session.
@@ -215,6 +228,7 @@ class NMLNetwork():
 
         Returns:
             nuffin"""
+        self.epoch = 0
         self.optim = tf.train.MomentumOptimizer(self.TDELTA, 0.9)
         self.train_step = self.optim.minimize(self.errsum)
         self.sess = tf.Session()
@@ -225,17 +239,66 @@ class NMLNetwork():
 
     def train(self, iters, dsocket):
         """Contains instructions for training neural network
+
         Args:
             iters: `int` of how many iterations to perform
             dsocket: a `Datasocket` object that forms feeder and contains data
+
+        Raises:
+            RuntimeError if self.sess is not initialized
         """
+        if not self.sess:
+            raise RuntimeError('session is not initialized.'
+                               'use init_sess method')
         for _ in range(iters):
             feeder = dsocket.get_feeder()
-            sess.run(self.train_step, feed_dict=feeder)
-            summary = sess.run(self.mergsum, feed_dict=feeder)
+            self.sess.run(self.train_step, feed_dict=feeder)
+            summary = self.sess.run(self.mergsum, feed_dict=feeder)
             self.epoch += 1
-            writer.add_summary(summary, self.epoch)
-        writer.flush()
+            self.writer.add_summary(summary, self.epoch)
+        self.writer.flush()
+
+    def calc(self, data, dsocket):
+        """calculates the output of NMLNetwork for given data
+
+        uses Datasocket.set_data_multiple method, so data must be appropriate
+        tuple pairs as if constructing Datasocket. If confused about names
+        refer to Datasocket.get_data() method.
+
+        Args:
+            data: `tuple`s of data of form ((name, data), (...), ...) to pass
+                as input
+            dsocket: `Datasocket` that currently set as input and tt
+
+        Returns:
+            list of calculated output values
+
+        Raises:
+            RuntimeError if session is not initialized"""
+        if not self.sess:
+            raise RuntimeError('session is not initialized.'
+                               'use init_sess method')
+        result = np.array([])
+        temp_set = tuple([(
+            name,
+            dsocket.get_data(name)[0])
+            for name in dsocket.get_sock()])
+        dsocket.set_data_multiple(*data)
+        for indx in range(dsocket.get_len()):
+            feeder = dsocket.get_feeder(indx)
+            result = np.append(
+                    result,
+                    self.sess.run(self.output, feed_dict=feeder))
+            # summary = self.sess.run(self.mergsum, feed_dict=feeder)
+            # self.epoch += 1
+            # self.writer.add_summary(summary, self.epoch)
+        # self.writer.flush()
+        # restore previous data
+        dsocket.set_data_multiple(*temp_set)
+        result = result.reshape(
+                int(result.size/len(self.output)),
+                len(self.output))
+        return result
 
 
 class Datasocket():
@@ -247,6 +310,7 @@ class Datasocket():
 
         Datasocket is a placeholder tensor with functions, that makes data
         management a little bit easier
+        TODO: integrate this into NMLNetwork class?
 
         Args:
             *args: `tuple`s of (name, data_list) that are considered as data
@@ -271,6 +335,14 @@ class Datasocket():
                 self.sockets[socket_name] = (
                         (tf.placeholder(tf.float32, name=socket_name), socket_data))
 
+    def get_len(self):
+        """returns minimum length of data array"""
+        dlen = np.inf  # actual infinity, holy sh!t
+        for item in self.sockets:
+            _, data = self.sockets[item]
+            dlen = min(dlen, len(data))
+        return dlen
+
     def get_feeder(self, pick=None):
         """forms dict_feed from all datasockets
         Args:
@@ -280,12 +352,8 @@ class Datasocket():
             `dict` appropriate to use as dict_feed to feed placeholders
         """
         feeder = {}
-        dlen = np.inf  # actual infinity
         if not pick:
-            for item in self.sockets:
-                _, data = self.sockets[item]
-                dlen = min(dlen, len(data))
-            pick = np.random.randint(dlen)
+            pick = np.random.randint(self.get_len())
         for item in self.sockets:
             dsock, data = self.sockets[item]
             feeder[dsock] = data[pick]
@@ -300,6 +368,8 @@ class Datasocket():
 
         Returns
             `list of Tensors` with requested dsockets"""
+        if not args:
+            return self.sockets
         res = []
         for item in args:
             try:
@@ -325,66 +395,40 @@ class Datasocket():
                 pass
         return res
 
-def form_feeder(feed_who, feed_what, pick):
-    """Forms dict_feed by selecting row from arrays
+    def set_data(self, name, data):
+        """switches feeding data in socket
 
-    `feed_who` and `feed_what` should be same length to form pairs
-    (sink: source) from dict(zip(...)).
+        placeholder tensor remains the same
 
-    Args:
-        feed_who: `list of Tensor placeholder` to feed data
-        feed_what: `iterable`. Data which we feed to `Tensor`
-        pick: `int` row which we select from data
+        Args:
+            name: 'str' name of socket for data replacement
+            data: 'iterable' of new data to feed
+        Raies:
+            KeyError if name doesn't correspond to any names in sockets
+        """
+        try:
+            self.sockets[name] = (self.sockets[name][0], data)
+        except KeyError:
+            raise KeyError('no such socket {}'.format(name))
 
-    Returns:
-        feeder: `dict` appropriate to use as dict_feed to feed placeholders
+    def set_data_multiple(self, *args):
+        """sets new data for socket using tuples as in constructor
 
-    Raises:
-        TypeError if feed_who and feed_what are not same length"""
+        tensors remain the same
 
-    if len(feed_what) != len(feed_who):
-        raise TypeError('inputs must be same length')
-    for sink, source in zip(feed_who, feed_what):
-        feeder[sink] = source[pick]
+        Args:
+            args: `tuple`s of (name, data) same as if initializing class
 
-def get_feeder(pick, data):
-    """Returns dictionary mapped for placeholders
+        Raises:
+            KeyError if any key in args raises KeyError in original
+            dictionary"""
+        for name, data in args:
+            try:
+                self.sockets[name]
+                self.set_data(name, data)
+            except KeyError:
+                raise KeyError('original sockdict has no {}'.format(item))
 
-    maps data for inputs and tt of network
-
-    Args:
-        pick: `int` of row from data
-        data: `iterable` of data that should be length of inputs + tt
-
-    Raises:
-        TypeError if data does not precisely fit inputs and tt"""
-    if len(data) != len(self.inputs) + len(self.tt):
-        raise TypeError('data should be same length of inputs and tt')
-    return form_feeder(inputs + tt, data, pick)
-
-def train_net(runs, iterator, data):
-    """Contains instructions for training neural network, unique
-
-    Uses name "writer" for summary writer
-
-    Args:
-        runs: `int` how many iterations to perform
-        iterator: `int` external cumulative variable for iteration count
-        data: learning set
-
-    Returns:
-        `int` of iteration count"""
-    if not iterator:
-        iterator = 0
-    for _ in range(runs):
-        pick = np.random.randint(len(data))
-        feeder = get_feeder(pick, data)
-        sess.run(train_step, feed_dict=self.feeder)
-        summary = sess.run(self.mergsum, feed_dict=feeder)
-        iterator += 1
-        writer.add_summary(summary, iterator)
-    writer.flush()
-    return iterator
 
 def get_curve(data, inputs, tt):
     """Builds a sequence of ANN output for data
