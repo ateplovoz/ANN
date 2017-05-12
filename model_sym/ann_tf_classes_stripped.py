@@ -25,8 +25,7 @@ class NNeuron():
         Returns:
             object of NNeuron class
 
-        Raises:
-            `TypeError` if inputs are not iterable"""
+        Raises: `TypeError` if inputs are not iterable"""
         try:
             iter(inputs)
         except TypeError:
@@ -72,7 +71,9 @@ class NNeuron():
 #                         name='ww_{}'.format(item))
 #                     for item in np.arange(self.inputsize)]
         #  probably poorly optimized --- sess.run for each neuron
-        sess.run([weight.assign(val + np.random.rand()*randval) for weight in self.ww])
+        sess.run([
+            weight.assign(val + randval/2 - np.random.rand()*randval)
+            for weight in self.ww])
 
 
 class NLayer():
@@ -178,14 +179,16 @@ class NMLNetwork():
                     self.LL[lcount - 1].get_out(),
                     num_neurons, name='layer{}'.format(lcount))
                 lcount += 1
-            self.LL[-1] = NLayer(self.LL[-2].get_out(), len(tt), name='outerlayer')
+            self.LL[-1] = NLayer(
+                    self.LL[-2].get_out(), len(tt), name='outerlayer')
             with tf.name_scope('output'):
                 self.output = self.LL[-1].get_out()
                 for out in self.output:
                     tf.summary.scalar('output', out)
             with tf.name_scope('error'):
                 self.error = [tf.sqrt(
-                    tf.squared_difference(tt, out) + 1) - 1 for tt, out in zip(tt, self.output)]
+                    tf.squared_difference(tt, out) + 1) - 1
+                    for tt, out in zip(tt, self.output)]
                 self.errsum = tf.add_n(self.error, name='error_sum')
                 for err in self.error:
                     tf.summary.scalar('error', err)
@@ -196,7 +199,7 @@ class NMLNetwork():
             # tf.summary.scalar(self.name + '-output', self.output)
         self.mergsum = tf.summary.merge_all()
 
-        self.TDELTA = 0.001
+        self.TDELTA = 0.01
         self.epoch = 0
         self.feeder = {}
         self.sess = None
@@ -229,7 +232,8 @@ class NMLNetwork():
         Returns:
             nuffin"""
         self.epoch = 0
-        self.optim = tf.train.MomentumOptimizer(self.TDELTA, 0.9)
+        # self.optim = tf.train.MomentumOptimizer(self.TDELTA, 0.9)
+        self.optim = tf.train.AdadeltaOptimizer(learning_rate=self.TDELTA)
         self.train_step = self.optim.minimize(self.errsum)
         self.sess = tf.Session()
         self.sess.run(tf.global_variables_initializer())
@@ -330,10 +334,12 @@ class Datasocket():
         with tf.name_scope('datasocket'):
             for item in args:
                 if not isinstance(item, tuple):
-                    raise TypeError('{} is not a tuple of (name, data)'.format(item))
+                    raise TypeError(
+                        '{} is not a tuple of (name, data)'.format(item))
                 socket_name, socket_data = item
-                self.sockets[socket_name] = (
-                        (tf.placeholder(tf.float32, name=socket_name), socket_data))
+                self.sockets[socket_name] = ((
+                    tf.placeholder(tf.float32, name=socket_name),
+                    socket_data))
 
     def get_len(self):
         """returns minimum length of data array"""

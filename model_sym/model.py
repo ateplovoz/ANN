@@ -79,10 +79,15 @@ testset = (
 valset = (
     ('T0', T0_v), ('P0', P0_v), ('Gt', Gt_v),
     ('MGP', MGP_v), ('OP', OP_v), ('T4', T4_v), ('ES', ES_v))
+sortedset = (
+    ('T0', data_dict['T0cp']), ('P0', data_dict['B']),
+    ('Gt', data_dict['GT1']), ('MGP', data_dict['MainGenPower']),
+    ('OP', data_dict['OutputPower']), ('T4', data_dict['TurbineExitTemp']),
+    ('ES', data_dict['EngineSpeed']))
 
 DSOCKET = ann.Datasocket(*learnset)
 
-mln_layout = [5 for _ in range(5)]
+mln_layout = [10 for _ in range(6)]
 mln_sym = ann.NMLNetwork(
         inputs=DSOCKET.get_sock('T0', 'P0', 'Gt'),
         tt=DSOCKET.get_sock('MGP', 'OP', 'T4', 'ES'),
