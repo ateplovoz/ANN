@@ -25,7 +25,28 @@ class StatWorker():
     u'''
     Класс StatWorker - обработка данных эксперимента
     '''
-    def __init__(self):
+    # TODO: refactor methods to work with self.data istead of returning stuff
+    def __init__(self, data):
+        u'''
+        StatWorker class --- making operations over data set
+
+        Args:
+            data:   data set to work with
+
+        Returns:
+            object of StatWorker class.
+
+        Raises:
+            TypeError if data is not iterable
+        '''
+        try:
+            iter(data)
+        except TypeError:
+            raise TypeError('data must be iterable')
+        if not isinstance(data, np.ndarray):
+            self.data = np.array(data)
+        else:
+            self.data = data
         self.alpha = 0.05
         self.zstar = 2.326
 
@@ -33,9 +54,8 @@ class StatWorker():
         if msg == '':
             raise RuntimeError('StatWorker: something went wrong!')
         else:
-            raise RuntimeError('StatWorker: something went wrong! Exactly: {}'
-                               .format(msg))
-
+            raise RuntimeError('StatWorker: something went wrong!'
+                               'Exactly: {}' .format(msg))
     def zstar_help(self):
         u'''
         Выдаёт таблицу z*
@@ -57,34 +77,25 @@ class StatWorker():
     def set_zstar(self, zstar):
         self.zstar = zstar
 
-    def check(self, data):
-        u'''
-        Проверка на правильный тип массива
-        '''
-        if type(data) != np.ndarray:
-            raise TypeError(
-                    'StatWorker: incoming data should be ndarray type!')
-
     def clean3sigma(self, data, mask=True):
         u'''
         Исключение точек, имеющих отклонение более, чем три сигма
         '''
-        self.check(data)
-        data_mean = data.mean()
-        data_std = data.std()
-        data_mask = np.abs(data - data_mean) <= data_std
+        data_mean = self.data.mean()
+        data_std = self.data.std()
+        data_mask = np.abs(self.data - self.data_mean) <= data_std
         if mask:
             return data_mask
         else:
-            return data[data_mask]
+            return self.data[data_mask]
 
-    def var_interv(self, data):
+    def var_interv(self):
         u'''
         Функция определения средней точки интервала
         '''
-        self.check(data)
         return np.array([
-            (data[i] + data[i + 1]) / 2 for i in range(len(data) - 1)])
+            (self.data[i] + self.data[i + 1]) / 2
+            for i in range(len(self.data) - 1)])
 
     def phi(self, u):
         u'''
@@ -132,18 +143,17 @@ class StatWorker():
             'H0': chi2exp < chi2Cr
         }
 
-    def conf_level(self, data, method='std'):
+    def conf_level(self, method='std'):
         u'''
         Построение доверительного интервала
         '''
-        self.check(data)
         conf_lower = None
         conf_upper = None
         tstud = None
-        mean = data.mean()
-        std = data.std()
-        variance = data.var()
-        n = data.size
+        mean = self.data.mean()
+        std = self.data.std()
+        variance = self.data.var()
+        n = self.data.size
 
         if method == 'var':
             # Расчёт по дисперсии
@@ -156,10 +166,8 @@ class StatWorker():
             conf_range = tstud * std / np.sqrt(n)
             conf_lower = mean - conf_range
             conf_upper = mean + conf_range
-
         else:
             self.panic('conf_level: unknown argument')
-
         return {
                 'res': u'[{0} - {1} - {2}'
                 .format(conf_lower, mean, conf_upper),
@@ -174,17 +182,104 @@ class StatWorker():
                 }
 
     # Исключение точек, не попадающих в доверительный интервал
-    def conf_clean(self, data):
-        self.check(data)
+    def conf_clean(self):
         mask = np.array([], dtype=bool)
-        for i in np.arange(data.size):
-            data_miss = np.delete(data, i)
+        for i in np.arange(self.data.size):
+            data_miss = np.delete(self.data, i)
             (cu, cl) = self.conf_level(data_miss)['ul']
-            if cl <= data[i] <= cu:
+            if cl <= self.data[i] <= cu:
                 mask = np.append(mask, [True])
             else:
                 mask = np.append(mask, [False])
         return mask
+
+    def uniformize(self, bins, count = 100):
+        '''Takes data set and creates random set that fits uniform
+        distribution
+
+        If there's not enough data to fit `count` argument then resulting
+        data will be truncated to the amount in one bin that contains least
+        points.
+
+        Args:
+            bins:   how many bins/intervals to create
+            count:  how many points to put into one bin
+        '''
+        tmp_data = self.data
+        np.random.shuffle(tmp_data)
+        datamin, datamax = (tmp_data.min(), tmp_data.max())
+        databins = [np.array([]),]*bins
+        step = (datamax - datamin)/bins
+        cur = 0
+        threshold = []
+        for _ in range(bins):
+            threshold.append(cur)
+            cur = cur + step
+        threshold = threshold[::-1]
+        for item in tmp_data:
+            for dbin, thr in zip(range(bins), threshold):
+                if item > thr:
+                    if len(databins[dbin]) >= count:
+                        break
+                    else:
+                        databins[dbin] = np.append(databins[dbin], item)
+                        break
+        minlen = min([len(dbin) for dbin in databins])
+        databins = [dbin[:minlen] for dbin in databins]
+        res = np.array([])
+        for dbin in databins:
+            res = np.append(res, dbin)
+        self.data = res
+
+    def uniformize_2d(self, bins, column, count=100):
+        '''Takes 2D data set and creates random set that fits uniform
+        distribution
+
+        Similar to uniformize, but performs over 2d array while retaining same
+        indexes.
+        If there's not enough data to fit `count` argument then resulting
+        data will be truncated to the amount in one bin that contains least
+        points.
+
+        Args:
+            bins:   how many bins/intervals to create
+            column: over which column to perform uniformization
+            count:  how many points to put into one bin
+        '''
+        data_2d = self.data
+        _, datawidth = data_2d.shape
+        data_2d = np.random.permutation(data_2d)
+        datamin, datamax = (data_2d[:, column].min(), data_2d[:, column].max())
+        databins = [np.array([]),]*bins
+        step = (datamax - datamin)/bins
+        cur = 0
+        threshold = []
+        for _ in range(bins):
+            threshold.append(cur)
+            cur = cur + step
+        threshold = threshold[::-1]
+        for item, pos in zip(
+                data_2d[:, column], range(data_2d[:, column].size)):
+            for dbin, thr in zip(range(bins), threshold):
+                if item > thr:
+                    if len(databins[dbin]) >= count:
+                        break
+                    else:
+                        databins[dbin] = np.append(
+                                databins[dbin], data_2d[pos])
+                        binlen = databins[dbin].size
+                        databins[dbin] = databins[dbin].reshape(
+                                int(binlen/datawidth), datawidth)
+                        break
+        res = np.array([])
+        for dbin in databins:
+            res = np.append(res, dbin)
+        res = res.reshape(int(res.size/datawidth), datawidth)
+        self.data = res
+
+
+    def get_data(self):
+        return self.data
 
 
 # Гидрогазодинамические функции и функции гидрогазодинамики
