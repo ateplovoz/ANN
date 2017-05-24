@@ -1,6 +1,6 @@
 # ANN
 ANN is an acronym for "artifical neural network" — this repository contains all work that
-i done so far
+i have done so far
 
 ANN is 2-year master degree project done by MPEI university student Vadim Pribylov.
 The goal is to develop a way for various functions approximation bases on experimental data.
