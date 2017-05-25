@@ -307,8 +307,7 @@ class NMLNetwork():
 
 class Datasocket():
     """class for managing outer connections of networks
-
-    Provides ways for creating feeders, managing external data and such"""
+Provides ways for creating feeders, managing external data and such"""
     def __init__(self, *args, name=None):
         """creates Datasocket object
 
