@@ -13,19 +13,22 @@ class NNeuron():
     Neuron is a basic element of neural network. Can have multiple inputs, but
     only one output."""
 
-    def __init__(self, inputs, name=None):
+    def __init__(self, inputs, exit='nonlinear', name=None):
         """Neuron class --- basic neuron
 
         Creates a neuron with relu activation function
         Args:
             inputs: `list of Tensor`. Tensors that we connect to the neuron
-            type: `str='relu` or any other `str`. type of activation function
-            name: `str`. Name of tensor node.
+            exit:   `str`, type of activation function, 'linear' or
+                    'nonlinear' only. 'nonlinear' by default
+            name:   `str`, name of tensor node.
 
         Returns:
             object of NNeuron class
 
-        Raises: `TypeError` if inputs are not iterable"""
+        Raises:
+            `TypeError` if inputs are not iterable
+            `RuntimeError` if exit is not 'linear' or 'nonlinear'"""
         try:
             iter(inputs)
         except TypeError:
@@ -51,7 +54,15 @@ class NNeuron():
                     for in_it, ww_it in zip(inputs, self.ww)]
                 self.iws = tf.add_n(self.iw, name='sum_of_iw')
             with tf.name_scope('oo'):
-                self.oo = tf.nn.relu(self.iws)
+                if exit == 'nonlinear':
+                    self.do = tf.nn.dropout(self.iws, 0.99)
+                    self.oo = tf.nn.relu(self.do)
+                    # self.oo = tf.nn.sigmoid(self.iws)
+                elif exit == 'linear':
+                    self.oo = self.iws
+                else:
+                    raise RuntimeError('unsupported neuron exit'
+                                       'type. use `linear` or `nonlinear`')
 
     def tune_weight(self, val, randval, sess):
         """Tunes weights of neuron
@@ -81,15 +92,16 @@ class NLayer():
 
     Contains array of `NNeuron`s and connects inputs to given tensors"""
 
-    def __init__(self, inputs, num_neurons, name=None):
+    def __init__(self, inputs, num_neurons, layertype='nonlinear', name=None):
         """Neural Layer class --- creates layer of neurons
 
         Forms a layer of neurons with given number of neurons, each one having
         given number of inputs plus one (for a constant input)
         Args:
-            inputs: `list of Tensor` inputs connected to the layer
-            num_neurons: `int`. Number of neurons inside layer
-            name: `str`. Name scope of layer
+            inputs:         `list of Tensor`, inputs connected to the layer
+            num_neurons:    `int`, number of neurons inside layer
+            layertype:      `str`, type of neuron exits, 'linear' or 'nonlinear' only
+            name:           `str`, name scope of layer
 
         Returns:
             object of NLayer class
@@ -110,10 +122,11 @@ class NLayer():
         with tf.name_scope(self.name):
             # Creates tf.constant inside of layer and injects it into inputs
             # as constant input (duh)
-            self.inputs = inputs + [tf.constant(1.0, name='const_input')]
+            self.inputs = inputs + [tf.constant(100.0, name='const_input')]
             self.VN = [
                 NNeuron(
                     self.inputs,
+                    exit = layertype,
                     name='{0}_neur{1}'.format(self.name, neur_c))
                 for neur_c in range(num_neurons)]
 
@@ -180,7 +193,8 @@ class NMLNetwork():
                     num_neurons, name='layer{}'.format(lcount))
                 lcount += 1
             self.LL[-1] = NLayer(
-                    self.LL[-2].get_out(), len(tt), name='outerlayer')
+                    self.LL[-2].get_out(), len(tt),
+                    layertype='linear', name='outerlayer')
             with tf.name_scope('output'):
                 self.output = self.LL[-1].get_out()
                 for out in self.output:
@@ -233,7 +247,8 @@ class NMLNetwork():
             nuffin"""
         self.epoch = 0
         # self.optim = tf.train.MomentumOptimizer(self.TDELTA, 0.9)
-        self.optim = tf.train.AdadeltaOptimizer(learning_rate=self.TDELTA)
+        # self.optim = tf.train.AdadeltaOptimizer(learning_rate=self.TDELTA)
+        self.optim = tf.train.AdagradOptimizer(learning_rate=self.TDELTA)
         self.train_step = self.optim.minimize(self.errsum)
         self.sess = tf.Session()
         self.sess.run(tf.global_variables_initializer())

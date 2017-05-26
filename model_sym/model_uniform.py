@@ -80,9 +80,13 @@ sortedset = (
 
 DSOCKET = ann.Datasocket(*learnset)
 
-mln_layout = [10 for _ in range(6)]
+mln_layout = [10 for _ in range(2)]
+# mln_sym = ann.NMLNetwork(
+#         inputs=DSOCKET.get_sock('T0', 'P0', 'Gt'),
+#         tt=DSOCKET.get_sock('MGP', 'OP', 'T4', 'ES'),
+#         layout_list = mln_layout, name='sym')
 mln_sym = ann.NMLNetwork(
-        inputs=DSOCKET.get_sock('T0', 'P0', 'Gt'),
+        inputs=DSOCKET.get_sock('Gt'),
         tt=DSOCKET.get_sock('MGP', 'OP', 'T4', 'ES'),
         layout_list = mln_layout, name='sym')
 
