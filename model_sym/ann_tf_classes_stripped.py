@@ -55,7 +55,7 @@ class NNeuron():
                 self.iws = tf.add_n(self.iw, name='sum_of_iw')
             with tf.name_scope('oo'):
                 if exit == 'nonlinear':
-                    self.do = tf.nn.dropout(self.iws, 0.99)
+                    self.do = tf.nn.dropout(self.iws, 0.9)
                     self.oo = tf.nn.relu(self.do)
                     # self.oo = tf.nn.sigmoid(self.iws)
                 elif exit == 'linear':
