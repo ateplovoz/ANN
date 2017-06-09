@@ -21,9 +21,7 @@ class NNeuron():
             inputs: `list of Tensor`. Tensors that we connect to the neuron
             exit:   `str`, type of activation function, 'linear' or
                     'nonlinear' only. 'nonlinear' by default
-            name:   `str`, name of tensor node.
-
-        Returns:
+            name:   `str`, name of tensor node.  Returns:
             object of NNeuron class
 
         Raises:
@@ -55,7 +53,7 @@ class NNeuron():
                 self.iws = tf.add_n(self.iw, name='sum_of_iw')
             with tf.name_scope('oo'):
                 if exit == 'nonlinear':
-                    self.do = tf.nn.dropout(self.iws, 0.9)
+                    self.do = tf.nn.dropout(self.iws, 1)
                     self.oo = tf.nn.relu(self.do)
                     # self.oo = tf.nn.sigmoid(self.iws)
                 elif exit == 'linear':
